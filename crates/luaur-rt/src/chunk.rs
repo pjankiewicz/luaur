@@ -40,6 +40,13 @@ impl Chunk {
         self
     }
 
+    /// The chunk name used for error messages / tracebacks.
+    ///
+    /// Mirrors `mlua::Chunk::name`.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Compile the source to bytecode (or return a [`Error::SyntaxError`]).
     fn compile(&self) -> Result<Vec<u8>> {
         let options = CompileOptions::default();

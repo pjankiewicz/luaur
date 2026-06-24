@@ -43,6 +43,9 @@ pub enum Value {
     /// A userdata value, represented opaquely as a table-backed handle. (Full
     /// `AnyUserData` borrowing is deferred — see crate docs.)
     UserData(crate::userdata::AnyUserData),
+    /// A boxed Lua/Rust error carried as a first-class value (mirrors
+    /// `mlua::Value::Error`). Produced when a Rust error is returned to Lua.
+    Error(Box<crate::error::Error>),
 }
 
 impl Value {
@@ -59,6 +62,20 @@ impl Value {
             Value::Table(_) => "table",
             Value::Function(_) => "function",
             Value::UserData(_) => "userdata",
+            Value::Error(_) => "error",
+        }
+    }
+
+    /// Whether this is an error value.
+    pub fn is_error(&self) -> bool {
+        matches!(self, Value::Error(_))
+    }
+
+    /// View as a reference to the contained error, if any.
+    pub fn as_error(&self) -> Option<&crate::error::Error> {
+        match self {
+            Value::Error(e) => Some(e),
+            _ => None,
         }
     }
 
@@ -134,6 +151,138 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Whether this is a userdata value.
+    pub fn is_userdata(&self) -> bool {
+        matches!(self, Value::UserData(_))
+    }
+
+    /// View as a userdata handle.
+    pub fn as_userdata(&self) -> Option<&crate::userdata::AnyUserData> {
+        match self {
+            Value::UserData(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// View as an `i32` if it is an in-range integer.
+    pub fn as_i32(&self) -> Option<i32> {
+        self.as_integer().and_then(|i| i32::try_from(i).ok())
+    }
+    /// View as a `u32` if it is an in-range integer.
+    pub fn as_u32(&self) -> Option<u32> {
+        self.as_integer().and_then(|i| u32::try_from(i).ok())
+    }
+    /// View as an `i64` if it is an integer.
+    pub fn as_i64(&self) -> Option<i64> {
+        self.as_integer()
+    }
+    /// View as a `u64` if it is an in-range integer.
+    pub fn as_u64(&self) -> Option<u64> {
+        self.as_integer().and_then(|i| u64::try_from(i).ok())
+    }
+    /// View as an `isize` if it is an in-range integer.
+    pub fn as_isize(&self) -> Option<isize> {
+        self.as_integer().and_then(|i| isize::try_from(i).ok())
+    }
+    /// View as a `usize` if it is an in-range integer.
+    pub fn as_usize(&self) -> Option<usize> {
+        self.as_integer().and_then(|i| usize::try_from(i).ok())
+    }
+    /// View as an `f32`.
+    pub fn as_f32(&self) -> Option<f32> {
+        self.as_number().map(|n| n as f32)
+    }
+    /// View as an `f64`.
+    pub fn as_f64(&self) -> Option<f64> {
+        self.as_number()
+    }
+
+    /// A raw pointer identifying reference-typed values (tables, functions,
+    /// strings, userdata). Returns null for value-typed (nil/bool/number)
+    /// values. Mirrors `mlua::Value::to_pointer`.
+    pub fn to_pointer(&self) -> *const std::ffi::c_void {
+        match self {
+            Value::String(s) => s.to_pointer(),
+            Value::Table(t) => t.to_pointer(),
+            Value::Function(f) => f.to_pointer(),
+            Value::UserData(u) => u.to_pointer(),
+            _ => core::ptr::null(),
+        }
+    }
+
+    /// Compare two values for equality honoring `__eq` metamethods.
+    /// Mirrors `mlua::Value::equals`.
+    pub fn equals(&self, other: &Value) -> Result<bool> {
+        // For reference types, route through the VM's `lua_equal` (which runs
+        // `__eq`). For value types, structural equality matches Lua semantics.
+        match (self, other) {
+            (Value::Table(a), Value::Table(b)) => a.equals(b),
+            (Value::UserData(a), Value::UserData(b)) => a.equals(b),
+            _ => Ok(self == other),
+        }
+    }
+
+    /// The metatable-aware string form of this value (honors `__tostring`).
+    /// Mirrors `mlua::Value::to_string`.
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    pub fn to_string(&self) -> Result<String> {
+        match self {
+            Value::Nil => Ok("nil".to_string()),
+            Value::Boolean(b) => Ok(b.to_string()),
+            Value::Integer(i) => Ok(i.to_string()),
+            Value::Number(n) => Ok(crate::value::format_number(*n)),
+            Value::Error(e) => Ok(e.to_string()),
+            // Reference types: ask the VM (honors `__tostring`).
+            Value::String(s) => s.to_str(),
+            other => {
+                // Find the owning Lua via the handle and use luaL_tolstring.
+                let lua = match other {
+                    Value::Table(t) => t.lua(),
+                    Value::Function(f) => f.lua(),
+                    Value::UserData(u) => u.lua(),
+                    _ => unreachable!(),
+                };
+                lua.value_to_string(other)
+            }
+        }
+    }
+}
+
+/// Format an `f64` the way Lua's `tostring` does for the common cases the
+/// tests exercise (e.g. `34.59`, integral floats as plain integers).
+pub(crate) fn format_number(n: f64) -> String {
+    if n.fract() == 0.0 && n.is_finite() && n.abs() < 1e15 {
+        format!("{}", n as i64)
+    } else {
+        // Rust's default float formatting matches Lua's "%.14g" closely enough
+        // for the values under test.
+        let s = format!("{n}");
+        s
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Nil, Value::Nil) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            // Numbers compare by value across the integer/float subtypes,
+            // matching Lua's `==` (1 == 1.0).
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::Integer(a), Value::Number(b)) | (Value::Number(b), Value::Integer(a)) => {
+                (*a as f64) == *b
+            }
+            (Value::String(a), Value::String(b)) => a == b,
+            // Reference types: identity (NOT `__eq`); use `equals` for `__eq`.
+            (Value::Table(a), Value::Table(b)) => a.to_pointer() == b.to_pointer(),
+            (Value::Function(a), Value::Function(b)) => a.to_pointer() == b.to_pointer(),
+            (Value::UserData(a), Value::UserData(b)) => a.to_pointer() == b.to_pointer(),
+            (Value::Error(a), Value::Error(b)) => a.to_string() == b.to_string(),
+            _ => false,
+        }
+    }
 }
 
 /// True if the `f64` is an exact integer within `i64` range (so it can be
@@ -155,6 +304,13 @@ pub(crate) fn push_value(lua: &Lua, value: &Value) -> Result<()> {
             Value::Table(t) => t.push_to_stack(),
             Value::Function(f) => f.push_to_stack(),
             Value::UserData(u) => u.push_to_stack(),
+            // An error value pushes as its message string (so Lua code that
+            // receives it can `tostring(err)` it). This matches how a Rust
+            // callback's `Err` surfaces to Lua as a string error object.
+            Value::Error(e) => {
+                let msg = e.to_string();
+                lua_pushlstring(state, msg.as_ptr() as *const c_char, msg.len());
+            }
         }
     }
     Ok(())

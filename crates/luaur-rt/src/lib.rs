@@ -64,12 +64,12 @@ mod userdata;
 mod value;
 
 pub use chunk::Chunk;
-pub use error::{Error, Result};
+pub use error::{Error, ExternalError, ExternalResult, Result};
 pub use function::Function;
 pub use multi::{MultiValue, Variadic};
 pub use state::Lua;
 pub use string::LuaString;
-pub use table::{Table, TablePairs};
+pub use table::{Table, TablePairs, TableSequence};
 pub use traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti};
 pub use userdata::{AnyUserData, UserData, UserDataMethods};
 pub use value::{Integer, Number, Value};
@@ -79,8 +79,9 @@ pub use value::{Integer, Number, Value};
 /// ergonomic surface into scope.
 pub mod prelude {
     pub use crate::{
-        AnyUserData, Chunk, Error, FromLua, FromLuaMulti, Function, IntoLua, IntoLuaMulti, Lua,
-        LuaString, MultiValue, Result, Table, UserData, UserDataMethods, Value, Variadic,
+        AnyUserData, Chunk, Error, ExternalError, ExternalResult, FromLua, FromLuaMulti, Function,
+        IntoLua, IntoLuaMulti, Lua, LuaString, MultiValue, Result, Table, UserData,
+        UserDataMethods, Value, Variadic,
     };
 
     // mlua-style `Lua*`-prefixed aliases for users coming from mlua's prelude.

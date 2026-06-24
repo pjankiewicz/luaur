@@ -98,6 +98,32 @@ impl AnyUserData {
     pub fn lua(&self) -> Lua {
         self.reference.lua()
     }
+
+    /// A raw pointer identifying this userdata. Mirrors
+    /// `mlua::AnyUserData::to_pointer`.
+    pub fn to_pointer(&self) -> *const c_void {
+        let state = self.reference.state();
+        unsafe {
+            self.reference.push();
+            let p = lua_topointer(state, -1);
+            lua_pop(state, 1);
+            p
+        }
+    }
+
+    /// Compare for equality honoring an `__eq` metamethod.
+    /// Mirrors `mlua::AnyUserData::equals`.
+    pub fn equals(&self, other: &AnyUserData) -> Result<bool> {
+        let lua = self.lua();
+        let state = lua.state();
+        unsafe {
+            self.reference.push();
+            other.reference.push();
+            let eq = lua_equal(state, -2, -1);
+            lua_pop(state, 2);
+            Ok(eq != 0)
+        }
+    }
 }
 
 impl std::fmt::Debug for AnyUserData {
@@ -108,8 +134,8 @@ impl std::fmt::Debug for AnyUserData {
 
 impl PartialEq for AnyUserData {
     fn eq(&self, other: &Self) -> bool {
-        self.reference.state() == other.reference.state()
-            && self.reference.id() == other.reference.id()
+        // Pointer identity (matches mlua): same underlying userdata object.
+        self.to_pointer() == other.to_pointer()
     }
 }
 

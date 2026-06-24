@@ -179,6 +179,46 @@ impl Lua {
         crate::string::create_string(self, s.as_ref())
     }
 
+    /// Create a table and populate it from an iterator of key/value pairs.
+    ///
+    /// Mirrors `mlua::Lua::create_table_from`.
+    pub fn create_table_from<K, V, I>(&self, iter: I) -> Result<Table>
+    where
+        K: crate::traits::IntoLua,
+        V: crate::traits::IntoLua,
+        I: IntoIterator<Item = (K, V)>,
+    {
+        let t = self.create_table();
+        for (k, v) in iter {
+            t.raw_set(k, v)?;
+        }
+        Ok(t)
+    }
+
+    /// Create a sequence (1-based array) table from an iterator of values.
+    ///
+    /// Mirrors `mlua::Lua::create_sequence_from`.
+    pub fn create_sequence_from<V, I>(&self, iter: I) -> Result<Table>
+    where
+        V: crate::traits::IntoLua,
+        I: IntoIterator<Item = V>,
+    {
+        let t = self.create_table();
+        for (i, v) in iter.into_iter().enumerate() {
+            t.raw_set((i + 1) as i64, v)?;
+        }
+        Ok(t)
+    }
+
+    /// Run a full garbage-collection cycle.
+    ///
+    /// Mirrors `mlua::Lua::gc_collect` (infallible here — luaur's `lua_gc`
+    /// cannot fail for `collect`).
+    pub fn gc_collect(&self) -> Result<()> {
+        lua_gc(self.state(), lua_GCOp::LUA_GCCOLLECT as c_int, 0);
+        Ok(())
+    }
+
     /// Create a Lua function from a Rust closure.
     ///
     /// Mirrors `mlua::Lua::create_function`. The closure receives `&Lua` and
@@ -255,8 +295,10 @@ impl LuaRef {
         self.inner.state
     }
 
-    /// The registry id.
+    /// The registry id. (Retained for internal diagnostics; handle identity is
+    /// established via `lua_topointer`, not the registry slot id.)
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn id(&self) -> c_int {
         self.id.get()
     }
@@ -308,6 +350,26 @@ impl Lua {
     /// Push a [`Value`] onto the stack.
     pub(crate) fn push_value(&self, value: &Value) -> Result<()> {
         crate::value::push_value(self, value)
+    }
+
+    /// Metatable-aware `tostring` of a [`Value`] (honors `__tostring`),
+    /// mirroring Lua's `tostring`/`luaL_tolstring`.
+    pub(crate) fn value_to_string(&self, value: &Value) -> Result<String> {
+        let state = self.state();
+        unsafe {
+            self.push_value(value)?;
+            let mut len = 0usize;
+            let p = lua_l_tolstring(state, -1, &mut len);
+            let out = if p.is_null() {
+                String::new()
+            } else {
+                let bytes = core::slice::from_raw_parts(p as *const u8, len);
+                String::from_utf8_lossy(bytes).into_owned()
+            };
+            // luaL_tolstring pushes the result string; pop it plus the value.
+            lua_pop(state, 2);
+            Ok(out)
+        }
     }
 
     /// Map a `lua_pcall`/`luau_load` status code plus the error object on the

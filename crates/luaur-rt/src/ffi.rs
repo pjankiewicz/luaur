@@ -36,6 +36,23 @@ pub(crate) use luaur_vm::functions::lua_next::lua_next;
 pub(crate) use luaur_vm::functions::lua_objlen::lua_objlen;
 pub(crate) use luaur_vm::functions::lua_settable::lua_settable;
 
+// ---- raw table access + metatables + stack juggling ----------------------
+pub(crate) use luaur_vm::functions::lua_equal::lua_equal;
+pub(crate) use luaur_vm::functions::lua_getmetatable::lua_getmetatable;
+pub(crate) use luaur_vm::functions::lua_getreadonly::lua_getreadonly;
+pub(crate) use luaur_vm::functions::lua_insert::lua_insert;
+pub(crate) use luaur_vm::functions::lua_rawget::lua_rawget;
+pub(crate) use luaur_vm::functions::lua_rawset::lua_rawset;
+pub(crate) use luaur_vm::functions::lua_setreadonly::lua_setreadonly;
+pub(crate) use luaur_vm::functions::lua_topointer::lua_topointer;
+
+// ---- garbage collection --------------------------------------------------
+pub(crate) use luaur_vm::enums::lua_gc_op::lua_GCOp;
+pub(crate) use luaur_vm::functions::lua_gc::lua_gc;
+
+// ---- metatable-aware tostring --------------------------------------------
+pub(crate) use luaur_vm::functions::lua_l_tolstring::lua_l_tolstring;
+
 // ---- closures / userdata -------------------------------------------------
 pub(crate) use luaur_vm::functions::lua_newuserdatadtor::lua_newuserdatadtor;
 pub(crate) use luaur_vm::functions::lua_pushcclosurek::lua_pushcclosurek;
@@ -43,6 +60,7 @@ pub(crate) use luaur_vm::functions::lua_setmetatable::lua_setmetatable;
 pub(crate) use luaur_vm::functions::lua_touserdata::lua_touserdata;
 
 // ---- refs / call / load --------------------------------------------------
+pub(crate) use luaur_vm::functions::lua_checkstack::lua_checkstack;
 pub(crate) use luaur_vm::functions::lua_error::lua_error;
 pub(crate) use luaur_vm::functions::lua_pcall::lua_pcall;
 pub(crate) use luaur_vm::functions::lua_ref::lua_ref;

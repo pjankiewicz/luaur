@@ -75,11 +75,28 @@ impl Error {
         Error::RuntimeError(message.to_string())
     }
 
+    /// Try to view the wrapped external error as a concrete type `T`.
+    ///
+    /// Mirrors the common `mlua::Error::downcast_ref` use: only
+    /// [`Error::ExternalError`] carries a wrapped error to downcast.
+    pub fn downcast_ref<T: StdError + 'static>(&self) -> Option<&T> {
+        match self {
+            Error::ExternalError(e) => e.downcast_ref::<T>(),
+            _ => None,
+        }
+    }
+
     /// Wrap an arbitrary `std::error::Error` as an [`Error::ExternalError`].
     ///
-    /// Mirrors `mlua::Error::external`.
+    /// Mirrors `mlua::Error::external`: if the input is already a luaur
+    /// [`Error`], it is preserved as-is rather than re-wrapped.
     pub fn external<T: Into<Box<DynStdError>>>(err: T) -> Self {
-        Error::ExternalError(err.into().into())
+        let boxed: Box<DynStdError> = err.into();
+        // Preserve an already-`Error` value instead of nesting it.
+        match boxed.downcast::<Error>() {
+            Ok(e) => *e,
+            Err(other) => Error::ExternalError(other.into()),
+        }
     }
 }
 
@@ -123,5 +140,49 @@ impl StdError for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Error::external(err)
+    }
+}
+
+impl From<&str> for Error {
+    fn from(msg: &str) -> Self {
+        Error::RuntimeError(msg.to_string())
+    }
+}
+
+impl From<String> for Error {
+    fn from(msg: String) -> Self {
+        Error::RuntimeError(msg)
+    }
+}
+
+/// Convenience for turning an arbitrary error/displayable into an [`Error`].
+///
+/// Mirrors `mlua::ExternalError`. `&str`/`String` become a [`Error::RuntimeError`]
+/// (matching mlua's runtime-error semantics for string errors); other
+/// `std::error::Error` types become an [`Error::ExternalError`].
+pub trait ExternalError {
+    /// Convert `self` into an [`Error`].
+    fn into_lua_err(self) -> Error;
+}
+
+impl<E: Into<Box<DynStdError>>> ExternalError for E {
+    fn into_lua_err(self) -> Error {
+        // `&str`/`String`/`io::Error`/... all implement `Into<Box<dyn Error>>`.
+        // Plain string errors become runtime errors (matching mlua); a wrapped
+        // `mlua::Error` is preserved by `Error::external`.
+        Error::external(self)
+    }
+}
+
+/// `Result` extension mirroring `mlua::ExternalResult`: lift any
+/// `Result<T, E>` into a `luaur` [`Result`] by converting the error.
+pub trait ExternalResult<T> {
+    /// Convert the error side via [`ExternalError::into_lua_err`].
+    fn into_lua_err(self) -> Result<T>;
+}
+
+impl<T, E: ExternalError> ExternalResult<T> for std::result::Result<T, E> {
+    fn into_lua_err(self) -> Result<T> {
+        self.map_err(ExternalError::into_lua_err)
     }
 }

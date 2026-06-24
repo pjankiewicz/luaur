@@ -44,9 +44,17 @@ impl Function {
 
         unsafe {
             let base = lua_gettop(state);
+            let nargs = args.len() as c_int;
+            // Guard against pushing more values than the Lua stack can hold:
+            // an unprotected overflow would abort the VM. We need room for the
+            // function + all arguments (+1 slack for the call machinery).
+            if lua_checkstack(state, nargs.saturating_add(2)) == 0 {
+                return Err(crate::error::Error::RuntimeError(
+                    "stack overflow: too many arguments to function call".to_string(),
+                ));
+            }
             // Push the function, then the arguments.
             self.reference.push();
-            let nargs = args.len() as c_int;
             for v in args.iter() {
                 lua.push_value(v)?;
             }
@@ -67,6 +75,40 @@ impl Function {
             R::from_lua_multi(results, &lua)
         }
     }
+
+    /// Return a new function that, when called, prepends `args` to its own
+    /// arguments and forwards to `self`.
+    ///
+    /// Mirrors `mlua::Function::bind`. Implemented as a Rust closure that
+    /// captures the bound prefix and the target function.
+    pub fn bind(&self, args: impl IntoLuaMulti) -> Result<Function> {
+        let lua = self.lua();
+        let bound: MultiValue = args.into_lua_multi(&lua)?;
+        let target = self.clone();
+        let bound_vec: Vec<crate::value::Value> = bound.into_vec();
+        lua.create_function(move |_, extra: MultiValue| {
+            let mut all = MultiValue::with_capacity(bound_vec.len() + extra.len());
+            for v in &bound_vec {
+                all.push_back(v.clone());
+            }
+            for v in extra {
+                all.push_back(v);
+            }
+            target.call::<MultiValue>(all)
+        })
+    }
+
+    /// A raw pointer identifying this function (for identity comparison).
+    /// Mirrors `mlua::Function::to_pointer`.
+    pub fn to_pointer(&self) -> *const std::ffi::c_void {
+        let state = self.reference.state();
+        unsafe {
+            self.reference.push();
+            let p = lua_topointer(state, -1);
+            lua_pop(state, 1);
+            p
+        }
+    }
 }
 
 impl std::fmt::Debug for Function {
@@ -77,7 +119,7 @@ impl std::fmt::Debug for Function {
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.reference.state() == other.reference.state()
-            && self.reference.id() == other.reference.id()
+        // Pointer identity (matches mlua): same underlying function object.
+        self.to_pointer() == other.to_pointer()
     }
 }
