@@ -19,6 +19,13 @@ impl Reducer {
         self.command = command;
         self.search_text = search_text.to_string();
 
+        // `name_table` stored a `*mut Allocator` pointing at the local allocator in
+        // `Reducer::new`; returning the Reducer by value relocated `self.allocator`,
+        // leaving that pointer dangling. Re-point it at the current allocator before
+        // parsing (the same pattern the test Fixture uses) — otherwise interning
+        // identifiers dereferenced freed stack memory and segfaulted.
+        self.name_table.rebind_allocator(&mut self.allocator);
+
         self.parse_result = Parser::parse(
             source,
             source.len(),
