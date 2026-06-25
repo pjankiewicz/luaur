@@ -65,13 +65,10 @@ impl BytecodeBuilder {
             for i in 2..typeinfo_bytes.len() {
                 let et = typeinfo_bytes[i];
 
-                // C++ `name = userdata ? userdata : getBaseTypeString(et)` — tryGetUserdataTypeName
-                // returns null for non-userdata types, so guard before CStr::from_ptr.
-                let ud_ptr = self.try_get_userdata_type_name(LuauBytecodeType(et as u16));
-                let name = if ud_ptr.is_null() {
-                    unsafe { CStr::from_ptr(get_base_type_string(et)).to_string_lossy() }
-                } else {
-                    unsafe { CStr::from_ptr(ud_ptr).to_string_lossy() }
+                // C++ `name = userdata ? userdata : getBaseTypeString(et)`.
+                let name = match self.try_get_userdata_type_name(LuauBytecodeType(et as u16)) {
+                    Some(s) => alloc::borrow::Cow::Borrowed(s),
+                    None => unsafe { CStr::from_ptr(get_base_type_string(et)).to_string_lossy() },
                 };
                 let optional = if (et as u16 & LBC_TYPE_OPTIONAL_BIT.0) != 0 {
                     "?"
@@ -88,13 +85,11 @@ impl BytecodeBuilder {
             for i in 0..self.typed_upvals.len() {
                 let l = &self.typed_upvals[i];
 
-                let ud_ptr = self.try_get_userdata_type_name(l.r#type);
-                let name = if ud_ptr.is_null() {
-                    unsafe {
+                let name = match self.try_get_userdata_type_name(l.r#type) {
+                    Some(s) => alloc::borrow::Cow::Borrowed(s),
+                    None => unsafe {
                         CStr::from_ptr(get_base_type_string(l.r#type.0 as u8)).to_string_lossy()
-                    }
-                } else {
-                    unsafe { CStr::from_ptr(ud_ptr).to_string_lossy() }
+                    },
                 };
                 let optional = if (l.r#type.0 & LBC_TYPE_OPTIONAL_BIT.0) != 0 {
                     "?"
@@ -108,13 +103,11 @@ impl BytecodeBuilder {
             for i in 0..self.typed_locals.len() {
                 let l = &self.typed_locals[i];
 
-                let ud_ptr = self.try_get_userdata_type_name(l.r#type);
-                let name = if ud_ptr.is_null() {
-                    unsafe {
+                let name = match self.try_get_userdata_type_name(l.r#type) {
+                    Some(s) => alloc::borrow::Cow::Borrowed(s),
+                    None => unsafe {
                         CStr::from_ptr(get_base_type_string(l.r#type.0 as u8)).to_string_lossy()
-                    }
-                } else {
-                    unsafe { CStr::from_ptr(ud_ptr).to_string_lossy() }
+                    },
                 };
                 let optional = if (l.r#type.0 & LBC_TYPE_OPTIONAL_BIT.0) != 0 {
                     "?"
