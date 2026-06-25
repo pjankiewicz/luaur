@@ -114,6 +114,18 @@ luaur::check_with_definitions(
 .unwrap();                                                            // checks clean
 ```
 
+The `Lua` / `Chunk` runtime objects carry these methods too, so the check composes with `?`
+right before you run the script — and errors come back as a structured
+`TypeDiagnostic { line, column, message, .. }` (1-based location), not a flat string:
+
+```rust
+let lua = Lua::new();
+lua.add_definitions("declare function add(a: number, b: number): number")?;
+let chunk = lua.load("local n: number = add(1, 2)\nreturn n");
+chunk.check()?;   // Err(Error::TypeError(Vec<TypeDiagnostic>)) on a mismatch
+chunk.exec()?;
+```
+
 ## How idiomatic is it?
 
 Body-to-body (imports, comments and blanks stripped), the port is **1.96×** the size of

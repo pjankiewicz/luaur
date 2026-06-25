@@ -21,7 +21,10 @@ luaur-require = { path = "../luaur-require", version = "0.1.0" }
 luaur-rt = { path = "../luaur-rt", version = "0.1.0" }
 
 [features]
-default = []
+# Batteries-included: the umbrella ships the static type checker on by default so
+# `luaur::check` / `luaur::Lua::check` are available out of the box. (luaur-rt
+# itself keeps `typecheck` off by default so its base API stays minimal.)
+default = ["typecheck"]
 # Mirror luaur-rt's opt-in flags so `luaur = { features = ["serde"] }` works the
 # same as depending on luaur-rt directly. async and send are mutually exclusive
 # (enforced in luaur-rt).
@@ -29,6 +32,9 @@ async = ["luaur-rt/async"]
 serde = ["luaur-rt/serde"]
 send = ["luaur-rt/send"]
 macros = ["luaur-rt/macros"]
+# The static type checker (forwards to luaur-rt's `typecheck`). On by default via
+# `default`; named here so `default-features = false` users can opt back in.
+typecheck = ["luaur-rt/typecheck"]
 
 # Not `all-features`: async and send are mutually exclusive. Document the
 # async-side superset (serde + async + macros).

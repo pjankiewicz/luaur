@@ -149,6 +149,29 @@ impl Chunk {
         }
     }
 
+    /// Statically type-check this chunk's source against the owning [`Lua`]'s
+    /// accumulated host definitions (the `typecheck` feature).
+    ///
+    /// Returns `Ok(())` when the source type-checks clean, or
+    /// [`Error::TypeError`](crate::Error::TypeError) carrying the structured
+    /// diagnostics otherwise. Because Luau is dynamically typed, the check is
+    /// advisory — it composes with `?` ahead of [`Chunk::exec`] / [`Chunk::eval`]
+    /// without changing what running the chunk does:
+    ///
+    /// ```
+    /// # #[cfg(feature = "typecheck")] {
+    /// # use luaur_rt::Lua;
+    /// let lua = Lua::new();
+    /// let c = lua.load("local x: number = 1\nreturn x");
+    /// c.check().unwrap();
+    /// # }
+    /// ```
+    #[cfg(feature = "typecheck")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "typecheck")))]
+    pub fn check(&self) -> Result<()> {
+        self.lua.check(&self.source)
+    }
+
     /// Run the chunk for its side effects, discarding return values.
     ///
     /// Mirrors `mlua::Chunk::exec`.

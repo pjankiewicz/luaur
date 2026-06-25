@@ -120,6 +120,8 @@ mod sync;
 mod table;
 mod thread;
 mod traits;
+#[cfg(feature = "typecheck")]
+mod typecheck;
 mod userdata;
 mod value;
 mod vector;
@@ -144,6 +146,15 @@ pub use sync::{MaybeSend, MaybeSync};
 pub use table::{Table, TablePairs, TableSequence};
 pub use thread::{Thread, ThreadStatus};
 pub use traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti};
+
+/// Static type-checking surface (the `typecheck` feature): the structured
+/// [`TypeDiagnostic`] type plus the free [`check`] / [`check_with_definitions`]
+/// helpers. The `Lua`/`Chunk` objects gain `check` / `add_definitions` methods
+/// (see [`Lua::check`] / [`Chunk::check`]) that return
+/// [`Error::TypeError`](crate::Error::TypeError).
+#[cfg(feature = "typecheck")]
+#[cfg_attr(docsrs, doc(cfg(feature = "typecheck")))]
+pub use typecheck::{check, check_with_definitions, TypeDiagnostic};
 
 /// The [`AsyncThread`] driver — a coroutine being run to completion as a Rust
 /// `Future`/`Stream` (the `async` feature).

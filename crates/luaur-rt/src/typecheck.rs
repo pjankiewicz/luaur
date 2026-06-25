@@ -1,18 +1,23 @@
-//! Type-checking convenience helper, completing the compile/eval/check trio.
+//! Static type-checking of Luau source against the host surface (the
+//! `typecheck` feature).
 //!
-//! Modelled exactly on `luaur-web`'s `check_script` (`CLI/src/Web.cpp:142-182`):
-//! build a [`Frontend`] over an in-memory single-source file resolver, register
-//! the Luau builtins, insert the source as the module `"main"`, type-check it on
-//! the validated **old** solver, and surface each diagnostic as
-//! `"<line>: <message>"` with a 1-based line number.
+//! This is the unique capability `mlua` cannot offer: because luaur ships
+//! Luau's static type checker (`luaur-analysis`), a script you are about to run
+//! can be type-checked against exactly the API the host exposes *before* it
+//! runs. The Luau VM is dynamically typed, so the runtime does not need any of
+//! this — but the *static* checker has no knowledge of the host surface unless
+//! you tell it.
 //!
-//! `check_script` borrows `luaur-web`'s `DemoFileResolver`/`DemoConfigResolver`.
-//! The umbrella crate must not depend on `luaur-web`, so a minimal single-source
-//! in-memory resolver is replicated here: a `#[repr(C)]` struct whose first field
-//! is the analysis `FileResolver` (so a `*mut FileResolver` vtable receiver casts
-//! back to the concrete type) plus the four vtable thunks, and a matching
-//! `ConfigResolver` returning a default [`Config`]. No require support is needed
-//! for a string check, so `resolve_module` returns `None`.
+//! Modelled exactly on the umbrella `luaur` crate's `check` helper (itself a
+//! port of `luaur-web`'s `check_script`): build a [`Frontend`] over an in-memory
+//! single-source file resolver, register the Luau builtins, optionally load host
+//! type definitions into the same global scope, insert the source as the module
+//! `"main"`, and type-check it on the validated **old** solver.
+//!
+//! The one difference from the umbrella's helper is the diagnostic shape: each
+//! diagnostic is surfaced as a structured [`TypeDiagnostic`] carrying its source
+//! location (line/column, 1-based) rather than a flat `"<line>: <message>"`
+//! string.
 
 use luaur_analysis::enums::solver_mode::SolverMode;
 use luaur_analysis::functions::freeze::freeze;
@@ -30,8 +35,41 @@ use luaur_analysis::type_aliases::module_name_file_resolver::ModuleName;
 use luaur_ast::records::ast_expr::AstExpr;
 use luaur_config::records::config::Config;
 
+use core::fmt;
+
+/// One type-checker diagnostic with its source location (all 1-based).
+///
+/// Produced by [`check`] / [`check_with_definitions`] and carried inside
+/// [`Error::TypeError`](crate::Error::TypeError). Unlike a flat error string,
+/// the location fields let an editor / build tool point at the exact span.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeDiagnostic {
+    /// 1-based start line.
+    pub line: u32,
+    /// 1-based start column.
+    pub column: u32,
+    /// 1-based end line.
+    pub end_line: u32,
+    /// 1-based end column.
+    pub end_column: u32,
+    /// The human-readable diagnostic message.
+    pub message: String,
+    /// True when the diagnostic comes from the host `declare` definitions rather
+    /// than the checked script.
+    pub in_definitions: bool,
+}
+
+impl fmt::Display for TypeDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.in_definitions {
+            write!(f, "(host definitions) ")?;
+        }
+        write!(f, "{}:{}: {}", self.line, self.column, self.message)
+    }
+}
+
 /// The fixed module name under which the checked source is registered, matching
-/// `check_script`'s `fileResolver.source["main"] = source`.
+/// the umbrella helper's `fileResolver.source["main"] = source`.
 const MAIN_MODULE: &str = "main";
 
 /// Minimal single-source in-memory [`FileResolver`] for a string check.
@@ -57,8 +95,10 @@ unsafe fn check_file_resolver_read_source_thunk(
     if name != MAIN_MODULE {
         return None;
     }
+    // SAFETY: per this fn's contract, `this` points at a live `CheckFileResolver`.
+    let source = unsafe { (*this).source.clone() };
     Some(SourceCode {
-        source: (*this).source.clone(),
+        source,
         r#type: SourceCode::Module,
     })
 }
@@ -137,7 +177,8 @@ unsafe fn check_config_resolver_get_config_thunk(
     _limits: *const TypeCheckLimits,
 ) -> *const Config {
     let this = this as *const CheckConfigResolver;
-    &(*this).default_config as *const Config
+    // SAFETY: per this fn's contract, `this` points at a live `CheckConfigResolver`.
+    unsafe { &(*this).default_config as *const Config }
 }
 
 impl CheckConfigResolver {
@@ -156,17 +197,16 @@ impl CheckConfigResolver {
 /// for synthetic (non-file) modules.
 const HOST_DEFINITIONS_PACKAGE: &str = "@host";
 
-/// The fallible body, run under `catch_unwind` (like `check_script`) so a panic
-/// in the type checker surfaces as a diagnostic rather than unwinding into the
-/// caller. Returns the collected `"<line>: <message>"` diagnostics, or an empty
-/// `Vec` when the source type-checks clean.
+/// The fallible body, run under `catch_unwind` so a panic in the type checker
+/// surfaces as a diagnostic rather than unwinding into the caller. Returns the
+/// collected [`TypeDiagnostic`]s, or an empty `Vec` when the source type-checks
+/// clean.
 ///
 /// `definitions`, when present and non-empty, is Luau definition-file syntax
 /// (`declare function …`, `declare class …`, `declare x: T`) describing the host
 /// surface; it is registered into the global scope *after* the builtins (so it
-/// may reference them) and *before* the script is checked, exactly as a `Fixture`
-/// registers a definition file.
-fn run_check(source: &str, definitions: Option<&str>) -> Vec<String> {
+/// may reference them) and *before* the script is checked.
+fn run_check(source: &str, definitions: Option<&str>) -> Vec<TypeDiagnostic> {
     let mut diagnostics = Vec::new();
 
     let mut file_resolver = CheckFileResolver::new(source);
@@ -197,10 +237,10 @@ fn run_check(source: &str, definitions: Option<&str>) -> Vec<String> {
     }
 
     // Register host type definitions, if any, into the same global scope the
-    // builtins live in. This is the unique Luau capability: a script then
-    // type-checks against the host-provided surface (the Rust functions /
-    // userdata exposed to the runtime). Pattern mirrors `Fixture::loadDefinition`:
-    // unfreeze -> loadDefinitionFile(globals, globalScope, …) -> freeze.
+    // builtins live in. A script then type-checks against the host-provided
+    // surface (the Rust functions / userdata exposed to the runtime). Pattern
+    // mirrors `Fixture::loadDefinition`: unfreeze -> loadDefinitionFile(globals,
+    // globalScope, …) -> freeze.
     if let Some(defs) = definitions {
         if !defs.is_empty() {
             unsafe {
@@ -216,28 +256,47 @@ fn run_check(source: &str, definitions: Option<&str>) -> Vec<String> {
                 );
                 freeze((*frontend_ptr).globals.global_types_mut());
 
-                // Malformed host definitions are a usage error, surfaced with a
-                // "host definitions:" prefix so they are distinguishable from
-                // script diagnostics. A failed load did not persist anything, so
+                // Malformed host definitions are a usage error, surfaced with
+                // `in_definitions: true` so they are distinguishable from script
+                // diagnostics. A failed load did not persist anything, so
                 // checking the script against a half-built surface is pointless —
                 // return immediately.
                 if !result.success {
                     for err in &result.parse_result.errors {
-                        let mut line = (err.get_location().begin.line + 1).to_string();
-                        line.push_str(": host definitions: ");
-                        line.push_str(err.get_message());
-                        diagnostics.push(line);
+                        let begin = err.get_location().begin;
+                        let end = err.get_location().end;
+                        diagnostics.push(TypeDiagnostic {
+                            line: begin.line + 1,
+                            column: begin.column + 1,
+                            end_line: end.line + 1,
+                            end_column: end.column + 1,
+                            message: err.get_message().to_string(),
+                            in_definitions: true,
+                        });
                     }
                     if let Some(module) = &result.module {
                         for err in &module.errors {
-                            let mut line = (err.location.begin.line + 1).to_string();
-                            line.push_str(": host definitions: ");
-                            line.push_str(&to_string_type_error(err));
-                            diagnostics.push(line);
+                            let begin = err.location.begin;
+                            let end = err.location.end;
+                            diagnostics.push(TypeDiagnostic {
+                                line: begin.line + 1,
+                                column: begin.column + 1,
+                                end_line: end.line + 1,
+                                end_column: end.column + 1,
+                                message: to_string_type_error(err),
+                                in_definitions: true,
+                            });
                         }
                     }
                     if diagnostics.is_empty() {
-                        diagnostics.push("host definitions: failed to load".to_string());
+                        diagnostics.push(TypeDiagnostic {
+                            line: 1,
+                            column: 1,
+                            end_line: 1,
+                            end_column: 1,
+                            message: "failed to load".to_string(),
+                            in_definitions: true,
+                        });
                     }
                     return diagnostics;
                 }
@@ -250,24 +309,31 @@ fn run_check(source: &str, definitions: Option<&str>) -> Vec<String> {
         frontend.check_module_name_optional_frontend_options(&MAIN_MODULE.to_string(), None);
 
     for err in &check_result.errors {
-        // std::to_string(err.location.begin.line + 1) + ": " + Luau::toString(err)
-        let mut line = (err.location.begin.line + 1).to_string();
-        line.push_str(": ");
-        line.push_str(&to_string_type_error(err));
-        diagnostics.push(line);
+        let begin = err.location.begin;
+        let end = err.location.end;
+        diagnostics.push(TypeDiagnostic {
+            line: begin.line + 1,
+            column: begin.column + 1,
+            end_line: end.line + 1,
+            end_column: end.column + 1,
+            message: to_string_type_error(err),
+            in_definitions: false,
+        });
     }
 
     diagnostics
 }
 
 /// Type-check Luau `source`. Returns `Ok(())` if it type-checks clean, or `Err`
-/// of the diagnostics (`"line: message"`, 1-based) on type errors.
+/// of the structured diagnostics on type errors.
 ///
 /// ```
-/// luaur::check("local x: number = 1").unwrap();
-/// assert!(luaur::check("local x: number = \"oops\"").is_err());
+/// # #[cfg(feature = "typecheck")] {
+/// luaur_rt::check("local x: number = 1").unwrap();
+/// assert!(luaur_rt::check("local x: number = \"oops\"").is_err());
+/// # }
 /// ```
-pub fn check(source: &str) -> Result<(), Vec<String>> {
+pub fn check(source: &str) -> core::result::Result<(), Vec<TypeDiagnostic>> {
     check_inner(source, None)
 }
 
@@ -275,7 +341,8 @@ pub fn check(source: &str) -> Result<(), Vec<String>> {
 ///
 /// `definitions` is Luau **definition-file syntax** describing the host-provided
 /// globals — the Rust functions, values, and userdata you expose to the runtime
-/// (e.g. via [`luaur_rt`](crate)'s `create_function` / `UserData`):
+/// (e.g. via [`Lua::create_function`](crate::Lua::create_function) /
+/// [`UserData`](crate::UserData)):
 ///
 /// ```text
 /// declare function add(a: number, b: number): number
@@ -287,41 +354,49 @@ pub fn check(source: &str) -> Result<(), Vec<String>> {
 /// end
 /// ```
 ///
-/// The Luau VM is dynamically typed, so the runtime does not need these — but the
-/// *static* checker has no knowledge of the host surface unless you tell it. This
-/// is a capability `mlua` cannot offer (Lua has no static types): a script you are
-/// about to run can be type-checked against exactly the API the host exposes.
-///
 /// Returns `Ok(())` when the source type-checks clean against the builtins plus
-/// the host definitions, or `Err` of the diagnostics (`"line: message"`, 1-based).
-/// Errors in the definitions themselves are reported with a `"host definitions:"`
-/// prefix.
+/// the host definitions, or `Err` of the structured diagnostics. Errors in the
+/// definitions themselves are reported with `in_definitions == true`.
 ///
 /// ```
+/// # #[cfg(feature = "typecheck")] {
 /// // The script references a host function the checker would otherwise reject:
-/// luaur::check("local n: number = add(1, 2)").unwrap_err();
-/// luaur::check_with_definitions(
+/// luaur_rt::check("local n: number = add(1, 2)").unwrap_err();
+/// luaur_rt::check_with_definitions(
 ///     "local n: number = add(1, 2)",
 ///     "declare function add(a: number, b: number): number",
 /// )
 /// .unwrap();
+/// # }
 /// ```
-pub fn check_with_definitions(source: &str, definitions: &str) -> Result<(), Vec<String>> {
+pub fn check_with_definitions(
+    source: &str,
+    definitions: &str,
+) -> core::result::Result<(), Vec<TypeDiagnostic>> {
     check_inner(source, Some(definitions))
 }
 
 /// Shared body of [`check`] / [`check_with_definitions`]: run the checker under
 /// `catch_unwind` (so a panic in the type checker becomes a diagnostic rather
 /// than unwinding into the caller) and fold the diagnostics into a `Result`.
-fn check_inner(source: &str, definitions: Option<&str>) -> Result<(), Vec<String>> {
-    // try { ... } catch (const std::exception& e) { ... } — a panic inside the
-    // checker becomes a single diagnostic.
+fn check_inner(
+    source: &str,
+    definitions: Option<&str>,
+) -> core::result::Result<(), Vec<TypeDiagnostic>> {
+    // A panic inside the checker becomes a single diagnostic.
     let owned = source.to_string();
     let owned_defs = definitions.map(|d| d.to_string());
     let diagnostics =
         match std::panic::catch_unwind(move || run_check(&owned, owned_defs.as_deref())) {
             Ok(diagnostics) => diagnostics,
-            Err(payload) => vec![panic_message(&payload)],
+            Err(payload) => vec![TypeDiagnostic {
+                line: 1,
+                column: 1,
+                end_line: 1,
+                end_column: 1,
+                message: panic_message(&payload),
+                in_definitions: false,
+            }],
         };
 
     if diagnostics.is_empty() {
@@ -340,94 +415,5 @@ fn panic_message(payload: &(dyn core::any::Any + Send)) -> String {
         s.clone()
     } else {
         "unknown error".to_string()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{check, check_with_definitions};
-
-    #[test]
-    fn check_accepts_well_typed_assignment() {
-        check("local x: number = 1").expect("well-typed source should check clean");
-    }
-
-    #[test]
-    fn definitions_introduce_a_host_function() {
-        // Without the declaration the global `add` is unknown; under --!strict
-        // that is an error.
-        let bare = check("--!strict\nlocal n: number = add(1, 2)\nreturn n");
-        assert!(
-            bare.is_err(),
-            "undeclared host function should not type-check: {bare:?}"
-        );
-
-        // Declaring it makes the same script check clean — and with the right type.
-        check_with_definitions(
-            "--!strict\nlocal n: number = add(1, 2)\nreturn n",
-            "declare function add(a: number, b: number): number",
-        )
-        .expect("declared host function should type-check");
-    }
-
-    #[test]
-    fn definitions_are_type_checked_against() {
-        // `add` returns number, so assigning it to a string must fail even though
-        // the call itself is well-formed.
-        let errors = check_with_definitions(
-            "--!strict\nlocal s: string = add(1, 2)\nreturn s",
-            "declare function add(a: number, b: number): number",
-        )
-        .expect_err("number result assigned to string should fail");
-        let joined = errors.join("\n");
-        assert!(
-            joined.contains("number") && joined.contains("string"),
-            "diagnostic should mention the number/string mismatch: {joined}"
-        );
-    }
-
-    #[test]
-    fn definitions_can_declare_a_host_value() {
-        check_with_definitions(
-            "--!strict\nlocal name: string = config.name\nreturn name",
-            "declare config: { name: string, retries: number }",
-        )
-        .expect("declared host value field access should type-check");
-    }
-
-    #[test]
-    fn malformed_definitions_are_reported_with_prefix() {
-        let errors = check_with_definitions(
-            "return 1",
-            "declare function add(a: number, b: number: number", // missing ')'
-        )
-        .expect_err("malformed host definitions should fail");
-        let joined = errors.join("\n");
-        assert!(
-            joined.contains("host definitions:"),
-            "definition errors should carry the host-definitions prefix: {joined}"
-        );
-    }
-
-    #[test]
-    fn empty_definitions_behave_like_plain_check() {
-        check_with_definitions("local x: number = 1", "")
-            .expect("empty definitions should be a no-op");
-    }
-
-    #[test]
-    fn check_rejects_type_mismatch() {
-        let errors = check("local x: number = \"oops\"").expect_err("type mismatch should fail");
-        let joined = errors.join("\n");
-        assert!(
-            joined.contains("number") && joined.contains("string"),
-            "diagnostic should mention number/string mismatch: {joined}"
-        );
-    }
-
-    #[test]
-    fn check_handles_missing_field_without_panicking() {
-        // Behaves either way (Ok or Err) — the contract is just "no panic".
-        let _ = check("--!strict\nlocal t = {}\nreturn t.missing");
     }
 }

@@ -38,7 +38,7 @@ Publish top-to-bottom; each layer only depends on layers above it.
 8.  luaur-analysis      (ast, bytecode, compiler, config, vm, common)
 9.  luaur-require       (+ config)
 10. luaur-cli-lib       (+ config)
-11. luaur-rt            (vm, compiler, common — the mlua-style API)
+11. luaur-rt            (vm, compiler, common — the mlua-style API; also luaur-config + luaur-analysis, optional, only under the `typecheck` feature — both already published above at 7 and 8)
 
 # Layer 5 — umbrella + leaves (wasm + CLIs)
 12. luaur               (umbrella: re-exports every lib + luaur-rt — publish after them all)

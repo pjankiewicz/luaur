@@ -28,8 +28,12 @@ pub use luaur_require as require;
 pub use luaur_rt as rt;
 pub use luaur_vm as vm;
 
-mod check;
-pub use check::{check, check_with_definitions};
+// The static type-check helpers now live on `luaur-rt` (behind its `typecheck`
+// feature, which the umbrella turns on by default). Re-export them so
+// `luaur::check` / `luaur::check_with_definitions` stay public, alongside the
+// structured `TypeDiagnostic` they now return.
+#[cfg(feature = "typecheck")]
+pub use luaur_rt::{check, check_with_definitions, TypeDiagnostic};
 
 // The headline high-level, mlua-style API. Re-exported flat at the crate root
 // so `luaur::Lua`, `luaur::Table`, etc. are available directly.
@@ -68,7 +72,10 @@ pub use luaur_rt::{
 
 /// Common entry points, re-exported for convenience.
 pub mod prelude {
-    pub use crate::{check, check_with_definitions, compile, eval};
+    pub use crate::{compile, eval};
+    /// The type-check helpers (the `typecheck` feature; on by default).
+    #[cfg(feature = "typecheck")]
+    pub use crate::{check, check_with_definitions};
     pub use luaur_ast::records::parse_options::ParseOptions;
     pub use luaur_compiler::records::compile_options::CompileOptions;
 

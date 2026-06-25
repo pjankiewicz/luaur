@@ -25,6 +25,13 @@ macros = ["dep:luaur-rt-derive"]
 # `Error` enum are byte-for-byte unchanged. Executor-agnostic: the caller drives
 # the returned futures on their own runtime.
 async = ["dep:futures-util"]
+# Static type-checking of Luau source against the host surface, using luaur's
+# port of Luau's type checker (`luaur-analysis`). Adds `Lua::check` /
+# `Lua::add_definitions` / `Chunk::check`, the free `check` /
+# `check_with_definitions` functions, the structured `TypeDiagnostic` type, and
+# the `Error::TypeError` variant. Off by default so the base build/API + `Error`
+# enum are byte-for-byte unchanged.
+typecheck = ["dep:luaur-analysis", "dep:luaur-config"]
 # Makes `Lua` and all of its handles (`Table`/`Function`/`String`/
 # `AnyUserData`/`Thread`/`Buffer`/`Value`/`RegistryKey`) `Send`, mirroring
 # mlua's `send` feature: the whole VM can be **moved** to another thread (the
@@ -50,6 +57,13 @@ luaur-vm = { path = "../luaur-vm", version = "0.1.0" }
 # mirroring the umbrella `luaur` crate's `compile` helper.
 luaur-ast = { path = "../luaur-ast", version = "0.1.0" }
 luaur-bytecode = { path = "../luaur-bytecode", version = "0.1.0" }
+# Optional: only pulled in by the `typecheck` feature. Provides Luau's static
+# type checker (the `Frontend` + builtins) used by `Lua::check` / `Chunk::check`
+# and the free `check` / `check_with_definitions` helpers.
+luaur-analysis = { path = "../luaur-analysis", version = "0.1.0", optional = true }
+# Optional: only pulled in by the `typecheck` feature. Provides the `Config`
+# the type-checker's config resolver returns.
+luaur-config = { path = "../luaur-config", version = "0.1.0", optional = true }
 
 # Optional: only pulled in by the `serde` feature. We implement the
 # Serializer/Deserializer directly over luaur-rt's `Value`/`Table`, so plain

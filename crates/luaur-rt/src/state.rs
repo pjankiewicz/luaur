@@ -47,6 +47,27 @@ pub(crate) struct LuaInner {
     /// trampoline builds a *borrowed* [`Lua`] around the calling thread's
     /// state and must not close it.
     owned: bool,
+    /// Host type definitions accumulated via [`Lua::add_definitions`] (the
+    /// `typecheck` feature), in Luau definition-file syntax. Each registration
+    /// is appended separated by a newline; the whole buffer is fed to the
+    /// type-checker by [`Lua::check`] / [`Chunk::check`]. Uses the crate's
+    /// `RefCell` interior-mutability idiom (the VM is single-threaded).
+    #[cfg(feature = "typecheck")]
+    typecheck_defs: std::cell::RefCell<String>,
+}
+
+impl LuaInner {
+    /// Build a fresh `LuaInner`, initializing every field (including the
+    /// feature-gated `typecheck_defs` store). Used by all `Lua` constructors so
+    /// the field set stays in one place.
+    fn new(state: *mut lua_State, owned: bool) -> LuaInner {
+        LuaInner {
+            state,
+            owned,
+            #[cfg(feature = "typecheck")]
+            typecheck_defs: std::cell::RefCell::new(String::new()),
+        }
+    }
 }
 
 impl Drop for LuaInner {
@@ -110,7 +131,7 @@ impl Lua {
             assert!(!state.is_null(), "lua_l_newstate returned null");
             lua_l_openlibs(state);
             Lua {
-                inner: XRc::new(LuaInner { state, owned: true }),
+                inner: XRc::new(LuaInner::new(state, true)),
                 _not_sync: NOT_SYNC,
             }
         }
@@ -125,7 +146,7 @@ impl Lua {
         let state = lua_l_newstate();
         assert!(!state.is_null(), "lua_l_newstate returned null");
         Lua {
-            inner: XRc::new(LuaInner { state, owned: true }),
+            inner: XRc::new(LuaInner::new(state, true)),
             _not_sync: NOT_SYNC,
         }
     }
@@ -163,7 +184,7 @@ impl Lua {
                 lua_l_openlibs(state);
             }
             let lua = Lua {
-                inner: XRc::new(LuaInner { state, owned: true }),
+                inner: XRc::new(LuaInner::new(state, true)),
                 _not_sync: NOT_SYNC,
             };
             lua.set_catch_rust_panics(options.catch_rust_panics);
@@ -185,10 +206,7 @@ impl Lua {
     /// and all handles cloned from it.
     pub(crate) unsafe fn from_borrowed(state: *mut lua_State) -> Lua {
         Lua {
-            inner: XRc::new(LuaInner {
-                state,
-                owned: false,
-            }),
+            inner: XRc::new(LuaInner::new(state, false)),
             _not_sync: NOT_SYNC,
         }
     }
@@ -572,6 +590,90 @@ impl Lua {
             // luaL_traceback pushes the resulting string onto the stack.
             Ok(LuaString::from_ref(self.pop_ref()))
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Static type-checking (the `typecheck` feature).
+//
+// luaur ships Luau's static type checker, so — unlike mlua — a script can be
+// type-checked against the host surface *before* it runs. The host surface is
+// described in Luau definition-file syntax and accumulated on the `Lua` via
+// `add_definitions`; `check` / `Chunk::check` then validate source against it.
+// ---------------------------------------------------------------------------
+#[cfg(feature = "typecheck")]
+#[cfg_attr(docsrs, doc(cfg(feature = "typecheck")))]
+impl Lua {
+    /// Register host type `definitions` (Luau definition-file syntax) so later
+    /// [`Lua::check`] / [`Chunk::check`] calls type-check against them.
+    ///
+    /// `definitions` describes the host-provided globals — the Rust functions,
+    /// values, and userdata you expose to the runtime (e.g. via
+    /// [`Lua::create_function`] / [`UserData`](crate::UserData)):
+    ///
+    /// ```text
+    /// declare function add(a: number, b: number): number
+    /// declare config: { name: string, retries: number }
+    /// ```
+    ///
+    /// The definitions are validated before being recorded: if they are
+    /// malformed, this returns [`Error::TypeError`](crate::Error::TypeError)
+    /// carrying the (`in_definitions`) diagnostics and records nothing. On
+    /// success they are appended to this VM's accumulated definitions.
+    pub fn add_definitions(&self, defs: &str) -> Result<()> {
+        // Validate the new definitions in isolation by checking a trivial body.
+        if let Err(diagnostics) = crate::typecheck::check_with_definitions("return nil", defs) {
+            // Only the definition-side diagnostics are this call's fault; a
+            // type error in the trivial body would be ours, not the caller's.
+            let def_errors: Vec<crate::TypeDiagnostic> = diagnostics
+                .into_iter()
+                .filter(|d| d.in_definitions)
+                .collect();
+            if !def_errors.is_empty() {
+                return Err(Error::TypeError(def_errors));
+            }
+        }
+        // Append, newline-separated, to the accumulated definitions.
+        let mut store = self.inner.typecheck_defs.borrow_mut();
+        if !store.is_empty() {
+            store.push('\n');
+        }
+        store.push_str(defs);
+        Ok(())
+    }
+
+    /// Type-check `source` against this VM's accumulated host definitions.
+    ///
+    /// Returns `Ok(())` if the source type-checks clean, or
+    /// [`Error::TypeError`](crate::Error::TypeError) carrying the structured
+    /// diagnostics otherwise.
+    ///
+    /// The Luau VM is dynamically typed, so this is **advisory**: a script that
+    /// fails the check can still be run (`exec`/`eval`). The value is catching
+    /// host-API misuse statically, before running untrusted or generated code.
+    pub fn check(&self, source: &str) -> Result<()> {
+        let defs = self.inner.typecheck_defs.borrow();
+        let result = if defs.is_empty() {
+            crate::typecheck::check(source)
+        } else {
+            crate::typecheck::check_with_definitions(source, &defs)
+        };
+        result.map_err(Error::TypeError)
+    }
+
+    /// Type-check `source` against this VM's accumulated host definitions **plus**
+    /// the extra `defs` (for a one-off check that does not persist `defs`).
+    ///
+    /// Same mapping as [`Lua::check`]: `Ok(())` when clean, otherwise
+    /// [`Error::TypeError`](crate::Error::TypeError).
+    pub fn check_with_definitions(&self, source: &str, defs: &str) -> Result<()> {
+        let accumulated = self.inner.typecheck_defs.borrow();
+        let combined = if accumulated.is_empty() {
+            defs.to_string()
+        } else {
+            format!("{accumulated}\n{defs}")
+        };
+        crate::typecheck::check_with_definitions(source, &combined).map_err(Error::TypeError)
     }
 }
 

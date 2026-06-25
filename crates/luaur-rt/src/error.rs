@@ -122,6 +122,16 @@ pub enum Error {
     /// Mirrors `mlua::Error::DeserializeError`.
     #[cfg(feature = "serde")]
     DeserializeError(String),
+    /// One or more static type-checker diagnostics produced by the `typecheck`
+    /// feature (e.g. [`Lua::check`](crate::Lua::check) /
+    /// [`Chunk::check`](crate::Chunk::check)). Each
+    /// [`TypeDiagnostic`](crate::TypeDiagnostic) carries its 1-based source
+    /// location.
+    ///
+    /// There is no mlua equivalent: Lua has no static types, so mlua cannot
+    /// type-check a script before running it.
+    #[cfg(feature = "typecheck")]
+    TypeError(Vec<crate::TypeDiagnostic>),
 }
 
 #[cfg(feature = "serde")]
@@ -215,6 +225,14 @@ impl fmt::Display for Error {
             Error::SerializeError(msg) => write!(f, "serialize error: {msg}"),
             #[cfg(feature = "serde")]
             Error::DeserializeError(msg) => write!(f, "deserialize error: {msg}"),
+            #[cfg(feature = "typecheck")]
+            Error::TypeError(diagnostics) => {
+                write!(f, "type error(s):")?;
+                for d in diagnostics {
+                    write!(f, "\n  {d}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

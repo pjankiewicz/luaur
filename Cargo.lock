@@ -525,10 +525,12 @@ version = "0.1.0"
 dependencies = [
  "bstr",
  "futures-util",
+ "luaur-analysis",
  "luaur-ast",
  "luaur-bytecode",
  "luaur-common",
  "luaur-compiler",
+ "luaur-config",
  "luaur-rt-derive",
  "luaur-vm",
  "serde",
