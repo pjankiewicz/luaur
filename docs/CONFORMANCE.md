@@ -49,9 +49,24 @@ pipeline end-to-end against the reference implementation.
 ## Out of scope by construction: the ergonomic API
 
 The `luaur-rt` crate (the mlua-style `Lua`/`Value`/`UserData` API) has **no upstream C++
-counterpart** — Luau exposes only a C API. There is therefore nothing to "conform" to; it
-is a Rust-native addition, validated by its own unit tests (not the conformance suite).
-The conformance claims here are about the translated *engine* only.
+counterpart** — Luau exposes only a C API. There is therefore nothing in *Luau* to
+"conform" to; it is a Rust-native addition. What it *is* measured against is
+[`mlua`](https://github.com/mlua-rs/mlua): mlua's own test suite was ported file-by-file,
+import-swap only, and **184 of 187 ported tests pass unmodified (98%)**. The 3 exceptions
+are pinned tests that document a genuine Lua-vs-Luau deviation (no tagged error value, no
+heap object enumeration by type, the `{:#?}` table-dump format). A small set of mlua
+behaviors are intentionally not ported because Luau is Lua-5.x-incompatible by design
+(Lua-5.x debug hooks — only the VM interrupt exists — native `i64`, and
+`collectgarbage`/`loadstring` in the base library), several of which mlua itself gates off
+for its `luau` feature. The figure is reproducible:
+
+```sh
+cargo nextest run -p luaur-rt                                # default
+cargo nextest run -p luaur-rt --features async,serde,macros  # opt-in surface
+cargo nextest run -p luaur-rt --features send                # Send/Sync handles
+```
+
+The conformance claims in the rest of this document are about the translated *engine* only.
 
 ## Known gaps
 

@@ -45,8 +45,24 @@ pub use check::{check, check_with_definitions};
 // `luaur-rt`. (Re-exported `luaur::rt` already aliases the crate for the rest
 // of the API.)
 pub use luaur_rt::{
-    AnyUserData, Chunk, Error, FromLua, FromLuaMulti, Function, IntoLua, IntoLuaMulti, Lua,
-    LuaString, MultiValue, Result, Table, UserData, UserDataMethods, Value, Variadic,
+    AnyUserData, Buffer, Chunk, ChunkMode, Compiler, Debug, DebugWhat, Error, ExternalError,
+    ExternalResult, FromLua, FromLuaMulti, Function, FunctionInfo, Integer, IntoLua, IntoLuaMulti,
+    Lua, LuaString, MaybeSend, MaybeSync, MetaMethod, MultiValue, Number, RegistryKey, Result,
+    Scope, Table, TablePairs, TableSequence, Thread, ThreadStatus, TypeMetatable, UserData,
+    UserDataFields, UserDataMethods, UserDataRef, UserDataRefMut, Value, Variadic, Vector, VmState,
+};
+
+/// The `async`-feature coroutine-as-`Future`/`Stream` driver, re-exported when
+/// the umbrella's `async` feature (which forwards to `luaur-rt/async`) is on.
+#[cfg(feature = "async")]
+pub use luaur_rt::AsyncThread;
+
+/// The `serde`-feature Rust↔Lua serialization surface, re-exported when the
+/// umbrella's `serde` feature (forwarding to `luaur-rt/serde`) is on.
+#[cfg(feature = "serde")]
+pub use luaur_rt::{
+    DeserializeOptions, LuaDeserializer, LuaSerdeExt, LuaSerializer, SerializableTable,
+    SerializableValue, SerializeOptions,
 };
 
 /// Common entry points, re-exported for convenience.

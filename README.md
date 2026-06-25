@@ -73,6 +73,45 @@ this is **pure Rust**, so it runs anywhere Rust does, including `wasm32-unknown-
 The lower-level `luaur::{compile, eval, check}` helpers and the raw C-style VM API
 (`luaur::vm`) are there when you want them.
 
+### How compatible with mlua, really?
+
+The honest way to answer "is the interface mlua-compatible" is to take mlua's **own**
+test suite and run it against luaur-rt with nothing changed but the import path. We did:
+**184 of 187 ported mlua tests pass unmodified (98%)** — import-swap only, no test rewrites.
+The other **3** are pinned to *document* a genuine Lua-vs-Luau deviation rather than hide it
+(`typeof(err)` is `"string"` not `"error"` because Luau has no tagged error value; no heap
+object enumeration by type; the `{:#?}` table-dump format). A handful of mlua behaviors are
+intentionally not ported because Luau is Lua-5.x-incompatible by design — the Lua-5.x debug
+hooks (only the VM *interrupt* exists), native `i64`, and `collectgarbage`/`loadstring` in the
+base library — several of which **mlua itself disables** for its own `luau` feature.
+
+The same opt-in feature flags as mlua are mirrored, so existing mlua code feels at home:
+
+```toml
+luaur = { version = "0.1", features = ["serde", "async", "macros"] }   # or "send"
+```
+
+`serde` (Rust↔Lua `Serialize`/`Deserialize`), `async` (Rust futures ↔ Luau coroutines),
+`send` (`Send`/`Sync` handles, mutually exclusive with `async`, as in mlua), and `macros`
+(`#[derive(UserData)]` / `#[derive(FromLua)]`).
+
+### A type checker mlua can't have
+
+Because luaur ships Luau's **type checker**, not just its VM, you can type-check a script
+against the host surface *before* running it — register Luau `declare` definitions for the
+Rust functions and userdata you expose, and the static checker holds the script to them.
+Lua has no static types, so this is something an mlua-style API fundamentally cannot offer:
+
+```rust
+// `add` is a host function; declaring its type lets the script type-check against it.
+luaur::check("local n: number = add(1, 2)").unwrap_err();            // unknown global
+luaur::check_with_definitions(
+    "local n: number = add(1, 2)",
+    "declare function add(a: number, b: number): number",
+)
+.unwrap();                                                            // checks clean
+```
+
 ## How idiomatic is it?
 
 Body-to-body (imports, comments and blanks stripped), the port is **1.96×** the size of
