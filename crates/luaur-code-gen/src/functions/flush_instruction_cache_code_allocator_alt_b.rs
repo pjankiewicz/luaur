@@ -13,16 +13,34 @@ pub fn flush_instruction_cache_mut(mem: *mut u8, size: usize) {
             sys_icache_invalidate(mem as *mut core::ffi::c_void, size);
         }
     }
-    #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "apple")))]
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        not(target_vendor = "apple"),
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))]
     {
-        // Note: __builtin___clear_cache is a GCC/Clang intrinsic.
-        // In Rust, we use the llvm.clear_cache intrinsic via core::arch.
+        // x86 / x86_64 keep the instruction and data caches coherent in hardware,
+        // so no explicit flush is needed after writing code.
+        let _ = (mem, size);
+    }
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        not(target_vendor = "apple"),
+        not(any(target_arch = "x86", target_arch = "x86_64"))
+    ))]
+    {
+        // Other architectures (e.g. aarch64 Linux) need an explicit i-cache flush.
+        // `__clear_cache` is the GCC/Clang builtin (formerly reached here via the
+        // nightly-only `llvm.clear_cache` intrinsic, which newer stable rustc
+        // rejects); it is provided by compiler-builtins on these targets.
         extern "C" {
-            #[link_name = "llvm.clear_cache"]
-            fn llvm_clear_cache(begin: *mut i8, end: *mut i8);
+            fn __clear_cache(begin: *mut core::ffi::c_char, end: *mut core::ffi::c_char);
         }
         unsafe {
-            llvm_clear_cache(mem as *mut i8, mem.add(size) as *mut i8);
+            __clear_cache(
+                mem as *mut core::ffi::c_char,
+                mem.add(size) as *mut core::ffi::c_char,
+            );
         }
     }
 }
