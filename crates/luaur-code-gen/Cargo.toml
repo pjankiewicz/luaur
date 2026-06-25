@@ -24,3 +24,15 @@ native = ["std"]
 cli = ["native"]
 native-codegen = ["native"]
 wasm = ["dep:wasm-bindgen"]
+
+# The JIT code-allocator's Windows path uses VirtualAlloc/VirtualFree/
+# VirtualProtect and FlushInstructionCache/GetCurrentProcess. Use windows-sys
+# (raw Win32), matching the rest of the workspace — the high-level `windows`
+# crate was referenced but never declared (E0433: cannot find crate `windows`).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_Debug",
+] }

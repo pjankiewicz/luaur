@@ -28,3 +28,10 @@ native = ["std"]
 cli = ["native"]
 native-codegen = ["native"]
 wasm = ["dep:wasm-bindgen"]
+
+# The page allocator's DebugLuauFreezeArena path uses VirtualAlloc/VirtualProtect
+# on Windows (paged_allocate/freeze/unfreeze). Use windows-sys (raw Win32), as
+# luaur-common does — the high-level `windows` crate was referenced but never
+# declared, so Windows failed to build (E0433: cannot find crate `windows`).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_System_Memory"] }

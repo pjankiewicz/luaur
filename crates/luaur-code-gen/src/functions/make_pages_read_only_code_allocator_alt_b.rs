@@ -48,17 +48,16 @@ pub fn make_pages_read_only_mut(mem: *mut u8, size: usize) -> bool {
     }
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::System::Memory::{VirtualProtect, PAGE_READONLY};
+        use windows_sys::Win32::System::Memory::{VirtualProtect, PAGE_READONLY};
 
         let mut old_protect: u32 = 0;
         unsafe {
             VirtualProtect(
                 mem as *const c_void,
                 size,
-                PAGE_READONLY.0,
+                PAGE_READONLY,
                 &mut old_protect as *mut u32,
-            )
-            .as_bool()
+            ) != 0
         }
     }
     #[cfg(not(any(

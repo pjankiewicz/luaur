@@ -10,10 +10,10 @@ pub fn free_pages_impl(mem: *mut u8, size: usize) {
     #[cfg(target_os = "windows")]
     {
         use core::ffi::c_void;
-        use windows::Win32::System::Memory::{VirtualFree, MEM_RELEASE};
+        use windows_sys::Win32::System::Memory::{VirtualFree, MEM_RELEASE};
 
         unsafe {
-            if VirtualFree(mem as *mut c_void, 0, MEM_RELEASE).as_bool() == false {
+            if VirtualFree(mem as *mut c_void, 0, MEM_RELEASE) == 0 {
                 CODEGEN_ASSERT!(false);
             }
         }

@@ -6,12 +6,11 @@ pub fn flush_instruction_cache(mem: *mut u8, size: usize) {
     #[cfg(target_os = "windows")]
     {
         use core::ffi::c_void;
-        use windows::Win32::System::Threading::{FlushInstructionCache, GetCurrentProcess};
+        use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
+        use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
         unsafe {
-            if FlushInstructionCache(GetCurrentProcess(), mem as *const c_void, size).as_bool()
-                == false
-            {
+            if FlushInstructionCache(GetCurrentProcess(), mem as *const c_void, size) == 0 {
                 CODEGEN_ASSERT!(false);
             }
         }

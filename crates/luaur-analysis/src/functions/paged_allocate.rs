@@ -34,9 +34,25 @@ pub(crate) fn page_size() -> usize {
         extern "C" {
             fn sysconf(name: c_int) -> isize;
         }
-        // _SC_PAGESIZE == 29 on Linux and macOS/Darwin.
+        // `_SC_PAGESIZE` is NOT the same number on every platform: it is 30 on
+        // Linux/Android but 29 on macOS/Darwin. The constant `29` here was the
+        // Darwin value — on Linux 29 is `_SC_VERSION`, so `sysconf(29)` returned
+        // the POSIX version (~200809), which is not a power of two and made every
+        // arena `Layout::from_size_align` fail (→ paged_allocate returns null →
+        // the allocator panics → the whole type checker falls over on Linux).
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        const _SC_PAGESIZE: c_int = 30;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
         const _SC_PAGESIZE: c_int = 29;
-        unsafe { sysconf(_SC_PAGESIZE) as usize }
+        let v = unsafe { sysconf(_SC_PAGESIZE) };
+        // Defensive: a page size must be a positive power of two (it is the
+        // alignment we hand to `Layout`). If sysconf ever returns something
+        // unexpected, fall back to 4 KiB rather than abort every allocation.
+        if v >= 1 && (v as usize).is_power_of_two() {
+            v as usize
+        } else {
+            4096
+        }
     }
 }
 
@@ -83,12 +99,16 @@ pub fn paged_allocate(size: usize) -> *mut core::ffi::c_void {
     // limit.
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::System::Memory::{
+        use windows_sys::Win32::System::Memory::{
             VirtualAlloc, MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE,
         };
         unsafe {
-            VirtualAlloc(None, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
-                as *mut core::ffi::c_void
+            VirtualAlloc(
+                core::ptr::null(),
+                size,
+                MEM_RESERVE | MEM_COMMIT,
+                PAGE_READWRITE,
+            ) as *mut core::ffi::c_void
         }
     }
 

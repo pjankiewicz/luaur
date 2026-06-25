@@ -37,16 +37,15 @@ pub unsafe fn make_pages_executable_mut(mem: *mut u8, size: usize) -> bool {
     #[cfg(target_os = "windows")]
     {
         use core::ffi::c_void;
-        use windows::Win32::System::Memory::{VirtualProtect, PAGE_EXECUTE_READ};
+        use windows_sys::Win32::System::Memory::{VirtualProtect, PAGE_EXECUTE_READ};
 
         let mut old_protect: u32 = 0;
         VirtualProtect(
             mem as *const c_void,
             size,
-            PAGE_EXECUTE_READ.0,
+            PAGE_EXECUTE_READ,
             &mut old_protect as *mut u32,
-        )
-        .as_bool()
+        ) != 0
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {

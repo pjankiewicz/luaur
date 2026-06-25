@@ -252,6 +252,7 @@ dependencies = [
  "luaur-config",
  "luaur-vm",
  "wasm-bindgen",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -327,6 +328,7 @@ dependencies = [
  "luaur-config",
  "luaur-vm",
  "wasm-bindgen",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -353,6 +355,7 @@ dependencies = [
  "luaur-common",
  "luaur-vm",
  "wasm-bindgen",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

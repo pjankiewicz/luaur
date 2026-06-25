@@ -3,7 +3,7 @@ use crate::records::code_allocator::CodeAllocator;
 use core::ffi::c_void;
 
 #[cfg(target_os = "windows")]
-use windows::Win32::System::Memory::{VirtualProtect, PAGE_EXECUTE_READ};
+use windows_sys::Win32::System::Memory::{VirtualProtect, PAGE_EXECUTE_READ};
 
 #[allow(non_snake_case)]
 pub fn make_pages_executable(mem: *mut u8, size: usize) -> bool {
@@ -19,8 +19,7 @@ pub fn make_pages_executable(mem: *mut u8, size: usize) -> bool {
                 size,
                 PAGE_EXECUTE_READ,
                 &mut old_protect,
-            )
-            .as_bool()
+            ) != 0
         }
     }
 

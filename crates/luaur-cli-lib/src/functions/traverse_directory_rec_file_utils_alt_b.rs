@@ -49,7 +49,8 @@ pub fn traverse_directory_rec_string_function_void_const_string_name(
         };
 
         let mut search_path = from_utf_8(path);
-        search_path.extend_from_slice(&[b'\\', b'*', 0]);
+        // `search_path` is a UTF-16 buffer (Vec<u16>); append L"\\*" + NUL.
+        search_path.extend_from_slice(&[b'\\' as u16, b'*' as u16, 0u16]);
         let mut find_data: WIN32_FIND_DATAW = unsafe { core::mem::zeroed() };
         let handle = unsafe { FindFirstFileW(search_path.as_ptr() as *const u16, &mut find_data) };
 

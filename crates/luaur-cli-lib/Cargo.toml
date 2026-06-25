@@ -28,3 +28,12 @@ native = ["std"]
 cli = ["native"]
 native-codegen = ["native"]
 wasm = ["dep:wasm-bindgen"]
+
+# The Windows file-utils helpers (is_file / traverse_directory_rec) call raw
+# Win32 wide-char filesystem APIs. Use windows-sys (raw Win32), matching the rest
+# of the workspace — the crate was referenced but never declared as a dependency.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }

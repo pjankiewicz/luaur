@@ -3,7 +3,7 @@ use crate::records::code_allocator::CodeAllocator;
 use core::ffi::c_void;
 
 #[cfg(target_os = "windows")]
-use windows::Win32::System::Memory::{VirtualFree, MEM_RELEASE};
+use windows_sys::Win32::System::Memory::{VirtualFree, MEM_RELEASE};
 
 #[allow(non_snake_case)]
 pub fn free_pages_impl_mut(mem: *mut u8, size: usize) {
@@ -12,7 +12,7 @@ pub fn free_pages_impl_mut(mem: *mut u8, size: usize) {
     #[cfg(target_os = "windows")]
     {
         unsafe {
-            if VirtualFree(mem as *mut c_void, 0, MEM_RELEASE).as_bool() == false {
+            if VirtualFree(mem as *mut c_void, 0, MEM_RELEASE) == 0 {
                 CODEGEN_ASSERT!(false);
             }
         }
