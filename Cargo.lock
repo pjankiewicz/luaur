@@ -236,6 +236,7 @@ dependencies = [
  "luaur-common",
  "luaur-compiler",
  "luaur-config",
+ "luaur-repl-cli",
  "luaur-require",
  "luaur-rt",
  "luaur-vm",
