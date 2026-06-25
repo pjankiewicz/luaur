@@ -16,10 +16,24 @@ rustflags = ["-C", "link-arg=--allow-undefined"]
 # UCRT headers, so the VM's `extern "C"` declarations of them have no exported
 # symbol to bind to ("unresolved external symbol fprintf"). legacy_stdio_definitions
 # provides the real, exported definitions; ucrt provides gmtime_s/localtime_s.
-[target.'cfg(windows)']
+# Gated to the MSVC toolchain specifically: these `/DEFAULTLIB:` flags are MSVC
+# linker syntax and break the GNU linker (e.g. the x86_64-pc-windows-gnu target).
+#
+# `/STACK:` raises the Windows main-thread stack reserve from the 1 MB MSVC default
+# to 64 MiB. The type checker/simplifier are deeply recursive; `RUST_MIN_STACK`
+# (above) only governs std-spawned threads, but nextest runs each test on the
+# process *main* thread, whose stack is fixed by this PE header value — so without
+# it ~all type-checking tests overflowed the 1 MB stack and died with 0xC0000005
+# on Windows (Linux/macOS were unaffected: their main-thread stacks are 8 MB and
+# grow, and RUST_MIN_STACK covers spawned threads). Upstream luau does the same
+# with `/STACK:2097152` on its MSVC CLI/test targets; we use 64 MiB to match
+# RUST_MIN_STACK because the Rust port's frames are larger.
+[target.'cfg(target_env = "msvc")']
 rustflags = [
     "-C",
     "link-arg=/DEFAULTLIB:legacy_stdio_definitions.lib",
     "-C",
     "link-arg=/DEFAULTLIB:ucrt.lib",
+    "-C",
+    "link-arg=/STACK:67108864",
 ]
