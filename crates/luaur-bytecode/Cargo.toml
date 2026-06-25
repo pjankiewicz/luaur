@@ -10,7 +10,7 @@ keywords = ["luau", "lua", "bytecode", "compiler"]
 categories = ["compilers", "encoding"]
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 
 [dependencies]
 wasm-bindgen = { version = "0.2", optional = true }

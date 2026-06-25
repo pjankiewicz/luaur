@@ -10,7 +10,7 @@ keywords = ["luau", "lua", "require", "modules", "resolver"]
 categories = ["development-tools"]
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 
 [dependencies]
 wasm-bindgen = { version = "0.2", optional = true }

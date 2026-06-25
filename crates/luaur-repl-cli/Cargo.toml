@@ -10,7 +10,7 @@ keywords = ["luau", "lua", "repl", "interpreter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 
 [[bin]]
 name = "luaur"

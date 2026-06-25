@@ -10,7 +10,7 @@ keywords = ["luau", "lua", "compiler", "bytecode", "cli"]
 categories = ["command-line-utilities", "compilers"]
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 
 [[bin]]
 name = "luaur-compile"
