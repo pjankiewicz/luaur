@@ -1,5 +1,4 @@
 use luaur_common::macros::luau_assert::LUAU_ASSERT;
-use luaur_common::FFlag;
 
 use crate::functions::paged_allocate::page_size;
 
@@ -16,10 +15,14 @@ extern "C" {
 /// Frees a block previously returned by `paged_allocate`. `size` is always the
 /// block size the matching allocation was made with (`kBlockSizeBytes`), which
 /// lets the default heap path reconstruct the same `Layout`.
-pub fn paged_deallocate(ptr: *mut core::ffi::c_void, size: usize) {
-    // By default we use operator new/delete instead of malloc/free so that they
-    // can be overridden externally.
-    if !FFlag::DebugLuauFreezeArena.get() {
+pub fn paged_deallocate(ptr: *mut core::ffi::c_void, size: usize, freeze: bool) {
+    // `freeze` is the strategy the matching `paged_allocate` used (captured once by
+    // the owning TypedAllocator). It must match the allocation — re-reading the
+    // global DebugLuauFreezeArena flag here was the bug: it is a toggleable
+    // ScopedFastFlag, so a block allocated under one value could be freed under the
+    // other, mismatching VirtualFree/operator-delete and corrupting the heap (the
+    // Windows 0xC0000005 / VirtualFree==0 failures).
+    if !freeze {
         // `::operator delete(ptr)`. Reconstruct the exact `Layout` used by
         // `paged_allocate`'s default branch.
         if ptr.is_null() || size == 0 {

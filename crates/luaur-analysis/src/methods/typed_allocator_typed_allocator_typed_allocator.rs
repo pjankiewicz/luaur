@@ -6,6 +6,7 @@ impl<T> TypedAllocator<T> {
             frozen: false,
             stuff: alloc::vec::Vec::new(),
             current_block_size: Self::kBlockSize,
+            paged: false,
         }
     }
 }

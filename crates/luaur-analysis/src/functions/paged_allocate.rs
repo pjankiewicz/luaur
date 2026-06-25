@@ -1,5 +1,3 @@
-use luaur_common::FFlag;
-
 #[cfg(not(target_os = "windows"))]
 use core::ffi::{c_int, c_void};
 
@@ -75,10 +73,17 @@ pub(crate) fn page_align(size: usize) -> usize {
 /// can be overridden externally. When `DebugLuauFreezeArena` is set, we use
 /// page-granular OS allocation so the blocks can later be frozen with
 /// `mprotect`/`VirtualProtect`.
-pub fn paged_allocate(size: usize) -> *mut core::ffi::c_void {
-    // By default we use operator new/delete instead of malloc/free so that
-    // they can be overridden externally.
-    if !FFlag::DebugLuauFreezeArena.get() {
+pub fn paged_allocate(size: usize, freeze: bool) -> *mut core::ffi::c_void {
+    // `freeze` is the allocation strategy chosen by the *caller* (the owning
+    // TypedAllocator captures `DebugLuauFreezeArena` once, at its first
+    // allocation, and threads the same value into both allocate and deallocate).
+    // It must NOT be re-read from the global flag here: the flag is a toggleable
+    // ScopedFastFlag in tests, so reading it at free time could pick a different
+    // strategy than was used to allocate — e.g. VirtualFree on heap memory or
+    // operator delete on VirtualAlloc memory — corrupting the heap. That mismatch
+    // is what crashed ~all type-checking tests on Windows (0xC0000005 / VirtualFree
+    // returning 0 at paged_deallocate). See `paged_deallocate`.
+    if !freeze {
         // `::operator new(size, std::nothrow)` — a heap allocation that returns
         // null on failure. The matching `::operator delete` lives in
         // `paged_deallocate`; both reconstruct the identical `Layout` from the
