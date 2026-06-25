@@ -12,7 +12,11 @@ fn ed(a: &str, b: &str) -> usize {
     editDistance(a.as_bytes(), b.as_bytes())
 }
 
+// A 1M-iteration throughput benchmark, not a correctness check — it exceeds the
+// nextest slow-timeout on CI. `#[ignore]` keeps it out of the default suite; run
+// it explicitly with `cargo test -- --ignored benchmark_levenshtein_distance`.
 #[test]
+#[ignore = "throughput benchmark, not a correctness test (exceeds the suite timeout)"]
 fn benchmark_levenshtein_distance() {
     let count = 1_000_000;
     let a = "Intercalate";

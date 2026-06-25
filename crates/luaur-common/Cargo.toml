@@ -22,3 +22,17 @@ native = ["std"]
 cli = ["native"]
 native-codegen = ["native"]
 wasm = ["dep:wasm-bindgen"]
+
+# Platform clock sources for the profiler (get_clock_{timestamp,period}.rs). Only
+# the matching target's cfg block compiles, so each dependency is target-gated.
+# macOS uses mach_absolute_time (no extra dep); wasm uses a frozen clock. These
+# were previously never declared, so the crate only built on macOS — Linux and
+# Windows referenced libc / windows-sys with no dependency to bind them.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Performance",
+] }

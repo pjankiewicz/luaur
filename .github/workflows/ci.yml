@@ -17,6 +17,12 @@ env:
   # incremental artifacts only bloat the cache.
   CARGO_INCREMENTAL: "0"
   RUST_BACKTRACE: "1"
+  # The type checker is deeply recursive — set a large test-thread stack
+  # explicitly in the process env so it reaches the test binaries regardless of
+  # whether nextest forwards .cargo/config.toml's [env]. 64 MiB clears the
+  # deep-type / simplify / conformance recursion that overflows the 8 MiB default
+  # (x86_64 frames are larger, so a CI runner overflows where arm64 dev does not).
+  RUST_MIN_STACK: "67108864"
 
 jobs:
   # The core suite on all three desktop platforms. luaur is pure Rust with no C

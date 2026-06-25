@@ -131,6 +131,92 @@ pub unsafe extern "C" fn sysconf(_name: c_int) -> core::ffi::c_long {
     65536
 }
 
+/// `strtoul(nptr, endptr, base)` — parse an unsigned long from a C string in the
+/// given radix, used by Luau's number lexing on the wasm path (where there is no
+/// host libc to bind). Mirrors C semantics: skip leading whitespace, accept an
+/// optional sign, honour a `0x`/`0` prefix for base 0/16, stop at the first
+/// non-digit, and write that position to `*endptr`. Overflow saturates to
+/// `c_ulong::MAX` (the C `ERANGE` return). `base` is assumed in `0..=36`.
+#[no_mangle]
+pub unsafe extern "C" fn strtoul(
+    nptr: *const c_char,
+    endptr: *mut *mut c_char,
+    base: c_int,
+) -> core::ffi::c_ulong {
+    use core::ffi::c_ulong;
+
+    if nptr.is_null() {
+        if !endptr.is_null() {
+            *endptr = nptr as *mut c_char;
+        }
+        return 0;
+    }
+
+    let mut p = nptr;
+    // Leading whitespace (space, \t, \n, \v, \f, \r).
+    while matches!(*p as u8, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r') {
+        p = p.add(1);
+    }
+
+    // Optional sign — C strtoul accepts '-' and returns the negation (mod 2^N).
+    let mut neg = false;
+    match *p as u8 {
+        b'+' => p = p.add(1),
+        b'-' => {
+            neg = true;
+            p = p.add(1);
+        }
+        _ => {}
+    }
+
+    // Base 0 auto-detection and the optional 0x / 0X prefix for hex.
+    let mut base = base;
+    if (base == 0 || base == 16) && *p as u8 == b'0' && matches!(*p.add(1) as u8, b'x' | b'X') {
+        p = p.add(2);
+        base = 16;
+    } else if base == 0 {
+        base = if *p as u8 == b'0' { 8 } else { 10 };
+    }
+    let radix = base as c_ulong;
+
+    let mut acc: c_ulong = 0;
+    let mut any = false;
+    let mut overflow = false;
+    loop {
+        let c = *p as u8;
+        let digit = match c {
+            b'0'..=b'9' => (c - b'0') as c_ulong,
+            b'a'..=b'z' => (c - b'a' + 10) as c_ulong,
+            b'A'..=b'Z' => (c - b'A' + 10) as c_ulong,
+            _ => break,
+        };
+        if digit >= radix {
+            break;
+        }
+        let (mul, o1) = acc.overflowing_mul(radix);
+        let (add, o2) = mul.overflowing_add(digit);
+        if o1 || o2 {
+            overflow = true;
+        }
+        acc = add;
+        any = true;
+        p = p.add(1);
+    }
+
+    if !endptr.is_null() {
+        // No digits consumed ⇒ point back at the original start, per C.
+        *endptr = (if any { p } else { nptr }) as *mut c_char;
+    }
+    if overflow {
+        return c_ulong::MAX;
+    }
+    if neg {
+        acc.wrapping_neg()
+    } else {
+        acc
+    }
+}
+
 // The page-mapping family is referenced only by the native-codegen page
 // allocator, which is never reached on the interpreter-only wasm path. They are
 // provided as faithful failures (mmap returns MAP_FAILED; the rest no-op) so
