@@ -1,0 +1,66 @@
+name: debug-simplify
+
+# Targeted, fast loop for the type-simplifier failures that don't reproduce on
+# the author's machine. Runs ONLY the failing tests (not the full suite), and an
+# AddressSanitizer job to pinpoint the dangling/stack pointer. Lives on the
+# `ci-debug` branch so it doesn't trigger the full CI gate on every iteration.
+on:
+  push:
+    branches: [ci-debug]
+  workflow_dispatch:
+
+concurrency:
+  group: debug-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "full"
+  RUST_MIN_STACK: "67108864"
+
+jobs:
+  # Fast confirmation of which of the 6 fail, on Linux + macOS, just those tests.
+  targeted:
+    name: targeted — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+      - name: Run only the failing simplify/type_infer tests
+        run: |
+          cargo nextest run -p luaur-unit-test --no-fail-fast -E \
+            'test(/simplify_two_unions$|simplify_union$|simplify_primitives_and_falsy$|simplify_boolean_and_truthy_and_falsy$|simplify_simplify_stops_at_cycles$|type_infer_try_unify_cli_50320_follow_in_any_unification$/)'
+
+  # AddressSanitizer: instruments the build so the crash tests report the exact
+  # bad access (e.g. stack-use-after-return) with a stack trace.
+  asan:
+    name: asan — ubuntu x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      - name: Run the simplify tests under ASan (build-std, instrumented)
+        env:
+          RUSTFLAGS: "-Zsanitizer=address"
+          RUSTDOCFLAGS: "-Zsanitizer=address"
+          ASAN_OPTIONS: "detect_stack_use_after_return=1:detect_leaks=0:abort_on_error=1:print_stacktrace=1"
+        run: |
+          cargo +nightly test -p luaur-unit-test \
+            --target x86_64-unknown-linux-gnu -Z build-std \
+            simplify_ -- --test-threads=1 --nocapture 2>&1 | tail -120 || true
+          echo "--- type_infer ---"
+          cargo +nightly test -p luaur-unit-test \
+            --target x86_64-unknown-linux-gnu -Z build-std \
+            type_infer_try_unify_cli_50320 -- --test-threads=1 --nocapture 2>&1 | tail -80
