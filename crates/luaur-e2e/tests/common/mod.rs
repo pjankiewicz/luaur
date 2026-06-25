@@ -22,6 +22,11 @@ use tempfile::TempDir;
 pub fn bin(name: &str) -> Command {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
+    // Honor the platform executable suffix: the bins are `luaur-analyze` on Unix
+    // but `luaur-analyze.exe` on Windows, so a bare `name` join would never
+    // `.exists()` there and every spawn test would fail to locate the binary.
+    let file_name = format!("{name}{}", std::env::consts::EXE_SUFFIX);
+
     // Most robust source: this test executable's own location. cargo / nextest
     // run integration tests from `<target>/<profile>/deps/<test-exe>`, so two
     // parents up is the profile dir that also holds the workspace `[[bin]]`
@@ -31,7 +36,7 @@ pub fn bin(name: &str) -> Command {
     // failed every e2e test when the workspace built into a non-default target dir.
     if let Ok(exe) = std::env::current_exe() {
         if let Some(profile_dir) = exe.parent().and_then(|deps| deps.parent()) {
-            candidates.push(profile_dir.join(name));
+            candidates.push(profile_dir.join(&file_name));
         }
     }
 
@@ -48,8 +53,8 @@ pub fn bin(name: &str) -> Command {
         .chain(workspace_target)
         .collect();
     for target in &target_roots {
-        candidates.push(target.join("debug").join(name));
-        candidates.push(target.join("release").join(name));
+        candidates.push(target.join("debug").join(&file_name));
+        candidates.push(target.join("release").join(&file_name));
     }
 
     let path = candidates.iter().find(|p| p.exists()).unwrap_or_else(|| {
