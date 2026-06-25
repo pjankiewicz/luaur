@@ -96,14 +96,19 @@ impl GenericTypeVisitorTrait for FindCyclicTypes {
 
     /// ToString.cpp:96
     fn visit_type_id_table_type(&mut self, ty: TypeId, ttv: &TableType) -> bool {
+        // C++ `FindCyclicTypes::visit(ty, TableType)` (ToString.cpp:96-98):
+        //   if (!visited.insert(ty)) return false;
+        // A *second* visit through the permanent `visited` set means this table was
+        // reached again as a SIBLING (shared, acyclic DAG node) — NOT a cycle. C++
+        // does NOT call `cycle()` here; it just stops descending. Genuine cycles are
+        // caught upstream by the traverse's forgetting `seen` set (an ancestor
+        // re-visit), which calls `cycle(ty)`. An earlier port mistakenly added a
+        // `cycle_type_id(ty)` call here, which over-named shared-but-acyclic tables
+        // (`(t1, t1) -> t1 where ...` instead of the inline form) — see
+        // visit_type_visit_once / to_string_tostring_unsee_ttv_if_array. It also did
+        // NOT fix the cyclic stack overflow (that was a dangling builtin_types
+        // pointer in the test fixture).
         if !self.insert_visited(ty) {
-            // C++ `FindCyclicTypes::visit(ty, TableType)` (ToString.cpp:96): a type
-            // reached a second time IS the cycle — record it so the stringifier
-            // can emit the `t1 where t1 = ...` binding instead of recursing into
-            // it forever. The port had dropped this `cycles.insert(ty)`, so cyclic
-            // tables had no cycle name and toString recursed until the stack
-            // overflowed (simplify_simplify_stops_at_cycles).
-            self.cycle_type_id(ty);
             return false;
         }
 
