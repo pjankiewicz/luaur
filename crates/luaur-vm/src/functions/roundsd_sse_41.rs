@@ -11,8 +11,18 @@ pub fn roundsd_sse41<const ROUNDING: i32>(v: f64) -> f64 {
         // We must ensure the target_feature is available or this is only called when SSE4.1 is supported.
         unsafe {
             let av = _mm_set_sd(v);
-            // _MM_FROUND_NO_EXC is 8.
-            let rv = _mm_round_sd(av, av, ROUNDING | 8);
+            // `_mm_round_sd`'s rounding mode is an intrinsic immediate (a
+            // compile-time constant), so it cannot be `ROUNDING | 8` — that is a
+            // const operation on the generic parameter, which stable Rust rejects
+            // ("generic parameters may not be used in const operations"). The
+            // rounding mode is the low two bits, so match it and pass a literal
+            // `mode | _MM_FROUND_NO_EXC (0x08)` per case.
+            let rv = match ROUNDING & 0x3 {
+                0 => _mm_round_sd(av, av, 0 | 8),
+                1 => _mm_round_sd(av, av, 1 | 8),
+                2 => _mm_round_sd(av, av, 2 | 8),
+                _ => _mm_round_sd(av, av, 3 | 8),
+            };
             _mm_cvtsd_f64(rv)
         }
     }

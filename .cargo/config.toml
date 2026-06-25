@@ -1,2 +1,13 @@
+# The type checker and type simplifier are deeply recursive. 64 MiB of thread
+# stack clears the deep-type / simplify / unify recursion that overflows the
+# default on larger (x86_64) stack frames. nextest reads this `[env]` and applies
+# it to the test processes, so it governs both local and CI test runs.
 [env]
-RUST_MIN_STACK = "16777216"
+RUST_MIN_STACK = "67108864"
+
+# luaur-web (wasm32-unknown-unknown) declares two C-variadic libc functions —
+# `snprintf` and `strftime` — that are intentionally supplied by the JS host at
+# runtime (see website/env.js + the index.html import map), not at link time.
+# Tell the wasm linker to leave them as undefined imports instead of erroring.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--allow-undefined"]

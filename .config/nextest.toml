@@ -6,15 +6,16 @@
 # panicked the machine. The underlying parser bug is fixed, but this timeout
 # auto-kills ANY future test that won't terminate, before it can OOM the box.
 #
-# Normal tests here run in well under 1s, so a 5s "slow" warning + termination
-# at 2x (10s) has an enormous margin and won't false-positive on legit tests.
+# Most tests run in well under 1s, but a handful of deep-recursion type-checker /
+# conformance tests legitimately take 10-25s on slower CI runners. Flag slow at
+# 15s and SIGTERM/SIGKILL after 2 periods (30s): a true infinite loop still dies
+# long before it can OOM the box, but a genuinely slow test is not killed.
 
 [profile.default]
 # Run the whole suite even when tests fail — we want the full failure list, not
 # an early bail on the first failure.
 fail-fast = false
-# Flag a test as slow after 5s; SIGTERM then SIGKILL it after 2 periods (10s).
-slow-timeout = { period = "5s", terminate-after = 2 }
+slow-timeout = { period = "15s", terminate-after = 2 }
 
 # Conservative parallelism while we harden the suite — leaves memory headroom so
 # that even if several future tests misbehave at once they can't sum to an OOM.

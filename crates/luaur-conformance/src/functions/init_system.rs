@@ -10,7 +10,13 @@ pub fn init_system() {
                 // Some unit tests make use of denormalized numbers. So flags to flush to zero or treat denormals as zero
                 // must be disabled for expected behavior.
                 _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_OFF);
-                _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_OFF);
+                // `_MM_SET_DENORMALS_ZERO_MODE` / `_MM_DENORMALS_ZERO_OFF` are not
+                // exposed by name in Rust's core::arch, so clear the DAZ bit
+                // (denormals-are-zero, MXCSR bit 6 = 0x0040) directly via MXCSR.
+                #[allow(deprecated)]
+                {
+                    _mm_setcsr(_mm_getcsr() & !0x0040);
+                }
             }
         }
     }

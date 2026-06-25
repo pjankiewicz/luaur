@@ -6,67 +6,24 @@ pub fn get_cpu_features_x_64() -> u32 {
     if crate::macros::codegen_target_x_64::CODEGEN_TARGET_X64 {
         #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
         {
+            // Use the `core::arch` CPUID intrinsic rather than hand-rolled inline
+            // asm: the `cpuid` instruction clobbers `rbx`/`ebx`, which LLVM
+            // reserves and forbids as an `asm!` operand ("rbx is used internally
+            // by LLVM"). `__cpuid` saves/restores it for us and returns a
+            // `CpuidResult { eax, ebx, ecx, edx }`. Works on every x86 OS.
             #[cfg(target_arch = "x86_64")]
             {
-                #[cfg(target_os = "windows")]
-                {
-                    unsafe {
-                        let mut cpuid_res = [0; 4];
-                        core::arch::x86_64::__cpuid(
-                            1,
-                            &mut cpuid_res[0],
-                            &mut cpuid_res[1],
-                            &mut cpuid_res[2],
-                            &mut cpuid_res[3],
-                        );
-                        cpuinfo = cpuid_res;
-                    }
-                }
-
-                #[cfg(not(target_os = "windows"))]
-                {
-                    unsafe {
-                        core::arch::asm!(
-                            "cpuid",
-                            inlateout("eax") 1 => cpuinfo[0],
-                            out("ebx") cpuinfo[1],
-                            out("ecx") cpuinfo[2],
-                            out("edx") cpuinfo[3],
-                            options(nomem, nostack, preserves_flags)
-                        );
-                    }
+                unsafe {
+                    let r = core::arch::x86_64::__cpuid(1);
+                    cpuinfo = [r.eax as i32, r.ebx as i32, r.ecx as i32, r.edx as i32];
                 }
             }
 
             #[cfg(target_arch = "x86")]
             {
-                #[cfg(target_os = "windows")]
-                {
-                    unsafe {
-                        let mut cpuid_res = [0; 4];
-                        core::arch::x86::__cpuid(
-                            1,
-                            &mut cpuid_res[0],
-                            &mut cpuid_res[1],
-                            &mut cpuid_res[2],
-                            &mut cpuid_res[3],
-                        );
-                        cpuinfo = cpuid_res;
-                    }
-                }
-
-                #[cfg(not(target_os = "windows"))]
-                {
-                    unsafe {
-                        core::arch::asm!(
-                            "cpuid",
-                            inlateout("eax") 1 => cpuinfo[0],
-                            out("ebx") cpuinfo[1],
-                            out("ecx") cpuinfo[2],
-                            out("edx") cpuinfo[3],
-                            options(nomem, nostack, preserves_flags)
-                        );
-                    }
+                unsafe {
+                    let r = core::arch::x86::__cpuid(1);
+                    cpuinfo = [r.eax as i32, r.ebx as i32, r.ecx as i32, r.edx as i32];
                 }
             }
         }
