@@ -9,6 +9,15 @@ description = "Luau (Roblox's typed Lua) implemented in Rust: compiler, VM, and 
 keywords = ["luau", "lua", "interpreter", "compiler", "vm"]
 categories = ["compilers", "emulators", "parser-implementations"]
 
+# The installable `luaur` binary (`cargo install luaur`) is the script runner /
+# REPL, whose implementation lives in luaur-repl-cli's lib. It is optional and
+# only pulled in by the `cli` feature so library-only users
+# (`default-features = false`) don't compile the CLI stack (rustyline, etc.).
+[[bin]]
+name = "luaur"
+path = "src/bin/luaur.rs"
+required-features = ["cli"]
+
 [dependencies]
 luaur-common = { path = "../luaur-common", version = "0.1.0" }
 luaur-ast = { path = "../luaur-ast", version = "0.1.0" }
@@ -19,12 +28,17 @@ luaur-analysis = { path = "../luaur-analysis", version = "0.1.0" }
 luaur-config = { path = "../luaur-config", version = "0.1.0" }
 luaur-require = { path = "../luaur-require", version = "0.1.0" }
 luaur-rt = { path = "../luaur-rt", version = "0.1.0" }
+luaur-repl-cli = { path = "../luaur-repl-cli", version = "0.1.0", optional = true }
 
 [features]
-# Batteries-included: the umbrella ships the static type checker on by default so
-# `luaur::check` / `luaur::Lua::check` are available out of the box. (luaur-rt
-# itself keeps `typecheck` off by default so its base API stays minimal.)
-default = ["typecheck"]
+# Batteries-included: the umbrella ships the static type checker AND the installable
+# `luaur` CLI on by default, so `luaur::check` works out of the box and
+# `cargo install luaur` produces the `luaur` script-runner/REPL with no extra flags.
+# Library-only users who want a minimal build opt out with
+# `default-features = false` (optionally re-adding `typecheck`).
+default = ["typecheck", "cli"]
+# The installable command-line binary (script runner / REPL). Pulls luaur-repl-cli.
+cli = ["dep:luaur-repl-cli", "luaur-repl-cli/cli"]
 # Mirror luaur-rt's opt-in flags so `luaur = { features = ["serde"] }` works the
 # same as depending on luaur-rt directly. async and send are mutually exclusive
 # (enforced in luaur-rt).
