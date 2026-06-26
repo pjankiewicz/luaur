@@ -8,7 +8,6 @@ use crate::macros::is_lua::isLua;
 use crate::macros::lua_idsize::LUA_IDSIZE;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, CStr};
-use core::fmt::Arguments;
 
 #[no_mangle]
 pub unsafe fn pusherror(L: *mut lua_State, msg: *const c_char) {
@@ -34,13 +33,15 @@ pub unsafe fn pusherror(L: *mut lua_State, msg: *const c_char) {
 
         // luaO_pushfstring expects a fmt C string + Rust fmt::Arguments.
         // We use CStr::from_ptr to safely convert C strings to Rust string-like objects for formatting.
-        let args: Arguments<'_> = format_args!(
-            "{}:{}: {}",
-            CStr::from_ptr(chunkid).to_string_lossy(),
-            line,
-            CStr::from_ptr(msg).to_string_lossy()
-        );
-        luaO_pushfstring(L, fmt_ptr, args);
+        //
+        // The `to_string_lossy()` `Cow`s must be bound to locals so they outlive
+        // the `format_args!` that borrows them: a `fmt::Arguments` can never
+        // outlive its captured temporaries, so storing it in a `let` and using
+        // it in a *later* statement dangles (E0716 — the temporaries are dropped
+        // at the end of the `let`). Inline `format_args!` into the call instead.
+        let chunk = CStr::from_ptr(chunkid).to_string_lossy();
+        let msg_str = CStr::from_ptr(msg).to_string_lossy();
+        luaO_pushfstring(L, fmt_ptr, format_args!("{}:{}: {}", chunk, line, msg_str));
     } else {
         lua_pushstring(L, msg);
     }

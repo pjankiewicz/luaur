@@ -107,3 +107,23 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Build luaur-web for wasm32-unknown-unknown
         run: cargo build -p luaur-web --target wasm32-unknown-unknown --features wasm --locked
+
+  # Cache-free cold `cargo check`: a *latent* compile error in an otherwise-
+  # unchanged file (e.g. issue #3's E0716 in pusherror.rs) can hide behind a warm
+  # build cache — the other jobs restore `Swatinem/rust-cache`, so an unchanged
+  # crate is never recompiled and its error never resurfaces. This job
+  # deliberately has **no cache**, so every run type-checks the whole workspace
+  # (incl. test targets) from scratch and surfaces such errors. Also checks the
+  # `luaur-rt` feature surface, since features change which code is compiled.
+  clean-check:
+    name: Clean check (no cache)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: cargo check --workspace --all-targets (cold)
+        run: cargo check --workspace --all-targets --locked
+      - name: cargo check luaur-rt feature surface (cold)
+        run: cargo check -p luaur-rt --all-targets --locked --features send,async,serde,macros,typecheck

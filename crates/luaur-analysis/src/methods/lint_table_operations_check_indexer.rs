@@ -33,23 +33,29 @@ impl LintTableOperations {
                 "Using '{}' on a table without an array part is likely a bug",
                 op
             );
-            let args = format_args!("{}", msg);
+            // Pass `format_args!` straight into the call: a `fmt::Arguments`
+            // borrows its operands, so storing it in a `let` and using it in a
+            // later statement is the shape that dangles if an operand is ever a
+            // temporary (the E0716 fixed in luaur-vm's pusherror.rs, issue #3).
             emit_warning(
                 unsafe { &mut *self.context },
                 Code::Code_TableOperations,
                 unsafe { (*node).base.location },
-                args,
+                format_args!("{}", msg),
             );
         } else if tty_ref.indexer.is_some()
             && is_string(tty_ref.indexer.as_ref().unwrap().index_type)
         {
             let msg = format!("Using '{}' on a table with string keys is likely a bug", op);
-            let args = format_args!("{}", msg);
+            // Pass `format_args!` straight into the call: a `fmt::Arguments`
+            // borrows its operands, so storing it in a `let` and using it in a
+            // later statement is the shape that dangles if an operand is ever a
+            // temporary (the E0716 fixed in luaur-vm's pusherror.rs, issue #3).
             emit_warning(
                 unsafe { &mut *self.context },
                 Code::Code_TableOperations,
                 unsafe { (*node).base.location },
-                args,
+                format_args!("{}", msg),
             );
         }
     }
