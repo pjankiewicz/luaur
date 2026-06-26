@@ -127,3 +127,36 @@ jobs:
         run: cargo check --workspace --all-targets --locked
       - name: cargo check luaur-rt feature surface (cold)
         run: cargo check -p luaur-rt --all-targets --locked --features send,async,serde,macros,typecheck
+
+  # Coverage-guided fuzzing (cargo-fuzz / libFuzzer + ASan) — a port of Luau's
+  # `fuzz/` suite. Builds every target and smoke-runs each so a regression that
+  # crashes/leaks the compiler, VM, type checker, or number parsers fails CI with
+  # a reproducing input. The in-tree generative fuzzer
+  # (`luaur-rt/tests/fuzz_generated.rs`) additionally runs in the normal test
+  # suite on every platform; this job adds the ASan-instrumented, coverage-guided
+  # layer. (For deep soaks, run `cargo +nightly fuzz run <target>` locally.)
+  fuzz:
+    name: Fuzz smoke (libFuzzer + ASan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Cache cargo + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "fuzz"
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
+      - name: Build all fuzz targets
+        run: cargo +nightly fuzz build
+        working-directory: fuzz
+      - name: Smoke-run each target (45s, ASan on)
+        working-directory: fuzz
+        run: |
+          for t in compile run typeck typeck_defs number structured; do
+            echo "::group::fuzz $t"
+            cargo +nightly fuzz run "$t" -- -max_total_time=45 -rss_limit_mb=4096
+            echo "::endgroup::"
+          done
