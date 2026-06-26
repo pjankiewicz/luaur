@@ -148,15 +148,17 @@ jobs:
         with:
           workspaces: "fuzz"
       - name: Install cargo-fuzz
-        uses: taiki-e/install-action@cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
       - name: Build all fuzz targets
         run: cargo +nightly fuzz build
         working-directory: fuzz
-      - name: Smoke-run each target (45s, ASan on)
+      - name: Smoke-run each target (30s, ASan on)
         working-directory: fuzz
         run: |
-          for t in compile run typeck typeck_defs number structured; do
+          for t in compile run typeck typeck_defs number structured determinism; do
             echo "::group::fuzz $t"
-            cargo +nightly fuzz run "$t" -- -max_total_time=45 -rss_limit_mb=4096
+            cargo +nightly fuzz run "$t" -- -max_total_time=30 -rss_limit_mb=4096
             echo "::endgroup::"
           done
