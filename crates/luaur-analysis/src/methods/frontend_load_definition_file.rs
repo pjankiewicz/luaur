@@ -62,6 +62,16 @@ impl Frontend {
 
         persist_checked_types(checked_module.clone(), globals, target_scope, package_name);
 
+        // Retain the checked module so its `TypeArena` — which owns the types
+        // just persisted into the global scope — outlives the returned
+        // `LoadDefinitionFileResult`. Without this, dropping the result (e.g. at
+        // the end of `register_builtin_globals`, which loads `"@luau"` twice)
+        // frees the arena while the global scope still references its types: a
+        // use-after-free the type checker then reads, SIGSEGVing on some
+        // toolchains (issue #6). Append-only so a repeated package name does not
+        // evict an earlier, still-referenced module.
+        globals.retained_modules.push(checked_module.clone());
+
         LoadDefinitionFileResult {
             success: true,
             parse_result,

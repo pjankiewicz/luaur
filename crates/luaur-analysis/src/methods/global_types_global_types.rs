@@ -169,6 +169,7 @@ impl GlobalTypes {
             global_scope,
             global_type_function_scope,
             mode,
+            retained_modules: alloc::vec::Vec::new(),
         }
     }
 }
