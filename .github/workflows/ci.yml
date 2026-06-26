@@ -128,48 +128,12 @@ jobs:
       - name: cargo check luaur-rt feature surface (cold)
         run: cargo check -p luaur-rt --all-targets --locked --features send,async,serde,macros,typecheck
 
-  # Coverage-guided fuzzing (cargo-fuzz / libFuzzer + ASan) — a port of Luau's
-  # `fuzz/` suite. Builds every target and smoke-runs each so a regression that
-  # crashes/leaks the compiler, VM, type checker, or number parsers fails CI with
-  # a reproducing input. The in-tree generative fuzzer
-  # (`luaur-rt/tests/fuzz_generated.rs`) additionally runs in the normal test
-  # suite on every platform; this job adds the ASan-instrumented, coverage-guided
-  # layer. (For deep soaks, run `cargo +nightly fuzz run <target>` locally.)
-  fuzz:
-    name: Fuzz smoke (libFuzzer + ASan)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install nightly Rust
-        uses: dtolnay/rust-toolchain@nightly
-      - name: Cache cargo + target
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "fuzz"
-      - name: Install cargo-fuzz
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz
-      # llvm-symbolizer makes ASan/LeakSanitizer reports show source locations
-      # instead of raw addresses, so a sanitizer failure is actionable.
-      - name: Install llvm-symbolizer
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq llvm
-      # Force the gnu target: cargo-fuzz defaults `--target` to the triple it was
-      # *itself* built for, and taiki-e/install-action ships a musl-static
-      # cargo-fuzz binary — so the default lands on x86_64-unknown-linux-musl,
-      # whose statically-linked libc AddressSanitizer rejects. The gnu target is
-      # the runner's host (already installed) and links libc dynamically.
-      - name: Build all fuzz targets
-        run: cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
-        working-directory: fuzz
-      - name: Smoke-run each target (30s, ASan on)
-        working-directory: fuzz
-        run: |
-          export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer || ls /usr/bin/llvm-symbolizer* 2>/dev/null | head -1)"
-          echo "ASAN_SYMBOLIZER_PATH=$ASAN_SYMBOLIZER_PATH"
-          for t in compile run typeck typeck_defs number structured determinism; do
-            echo "::group::fuzz $t"
-            cargo +nightly fuzz run "$t" --target x86_64-unknown-linux-gnu -- -max_total_time=30 -rss_limit_mb=4096
-            echo "::endgroup::"
-          done
+  # NOTE: coverage-guided fuzzing (cargo-fuzz / libFuzzer + ASan) is deliberately
+  # NOT a PR gate. A 30-second smoke run isn't fuzzing — real fuzzing is a long
+  # soak with an accumulating corpus — and gating PRs on it makes unrelated
+  # changes flaky whenever the fuzzer wanders into a pre-existing bug. The
+  # cargo-fuzz targets run instead as a scheduled long soak in
+  # `.github/workflows/fuzz.yml` (non-blocking, corpus persisted, crashes uploaded
+  # as artifacts). The deterministic, seeded in-tree generative fuzzer
+  # (`luaur-rt/tests/fuzz_generated.rs`) DOES run here, in the normal `test` job —
+  # it's a fast reproducible test, not a fuzzer.

@@ -1,0 +1,85 @@
+# Long-soak coverage-guided fuzzing (cargo-fuzz / libFuzzer + ASan).
+#
+# This is deliberately separate from `ci.yml` and is NEVER a PR gate. A fuzzer is
+# only meaningful over a long run with an accumulating corpus; gating PRs on a
+# 30-second smoke run is theatre, and makes unrelated PRs flaky the moment the
+# fuzzer rediscovers a pre-existing bug. So we run it on a schedule (and on
+# demand), persist each target's corpus across runs so coverage compounds, and
+# upload any crash/leak reproducer as an artifact. A failure here is a
+# notification to investigate — it does not block development.
+name: Fuzz (long soak)
+
+on:
+  schedule:
+    # 03:17 UTC nightly (odd minute to avoid the top-of-hour stampede).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds_per_target:
+        description: "Soak time per target, in seconds"
+        required: false
+        default: "1200"
+
+concurrency:
+  # Never run two soaks at once; a newer one supersedes an in-flight one.
+  group: fuzz-soak
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    name: soak ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    # Generous ceiling; the per-target time budget below is the real limit.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [compile, run, typeck, typeck_defs, number, structured, determinism]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Cache cargo + fuzz build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "fuzz"
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Install llvm-symbolizer
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq llvm
+      # Persist (and accumulate) this target's corpus across scheduled runs so
+      # coverage compounds over time. The unique key always saves a fresh entry;
+      # restore-keys pulls the most recent prior corpus to build on.
+      - name: Restore corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+      # cargo-fuzz defaults `--target` to the triple it was itself built for
+      # (taiki-e ships a musl-static binary), whose static libc ASan rejects;
+      # pin the runner's dynamic-libc gnu host instead.
+      - name: Build target
+        run: cargo +nightly fuzz build ${{ matrix.target }} --target x86_64-unknown-linux-gnu
+        working-directory: fuzz
+      - name: Soak
+        working-directory: fuzz
+        run: |
+          export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer || ls /usr/bin/llvm-symbolizer* 2>/dev/null | head -1)"
+          secs="${{ github.event.inputs.seconds_per_target || '1200' }}"
+          echo "Soaking '${{ matrix.target }}' for ${secs}s (symbolizer: $ASAN_SYMBOLIZER_PATH)"
+          cargo +nightly fuzz run ${{ matrix.target }} --target x86_64-unknown-linux-gnu \
+            -- -max_total_time="$secs" -rss_limit_mb=4096 -print_final_stats=1
+      - name: Upload crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
