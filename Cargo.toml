@@ -27,6 +27,9 @@ members = [
     "crates/luaur-web",
     "examples/*",
 ]
+# The cargo-fuzz crate is its own (nightly/libfuzzer) workspace — keep it out of
+# the main one so normal `cargo build`/CI never pulls the fuzz toolchain.
+exclude = ["fuzz"]
 
 [profile.release]
 lto = "fat"

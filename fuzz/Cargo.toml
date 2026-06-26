@@ -1,0 +1,65 @@
+# cargo-fuzz crate — a Rust port of Luau's `fuzz/` suite (libFuzzer targets).
+# Detached from the parent workspace (own `[workspace]`) and never published, so
+# the nightly + libfuzzer toolchain it needs does not touch the normal build.
+#
+#   cargo +nightly fuzz run compile        # parser + compiler (Luau compiler.cpp)
+#   cargo +nightly fuzz run run            # compile + interrupt-bounded VM (kFuzzVM)
+#   cargo +nightly fuzz run typeck         # the type checker (Luau typeck.cpp)
+#   cargo +nightly fuzz run number         # number parsing (Luau number.cpp)
+#   cargo +nightly fuzz run structured     # structured valid-Luau gen (Luau proto.cpp)
+[package]
+name = "luaur-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+luaur-rt = { path = "../crates/luaur-rt", features = ["typecheck"] }
+luaur-ast = { path = "../crates/luaur-ast" }
+
+# Detach from the parent workspace so cargo-fuzz's nightly instrumentation is
+# scoped here only.
+[workspace]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "compile"
+path = "fuzz_targets/compile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "run"
+path = "fuzz_targets/run.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "typeck"
+path = "fuzz_targets/typeck.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "number"
+path = "fuzz_targets/number.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "structured"
+path = "fuzz_targets/structured.rs"
+test = false
+doc = false
+bench = false
