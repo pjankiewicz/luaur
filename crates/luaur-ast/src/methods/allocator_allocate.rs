@@ -45,6 +45,9 @@ impl Allocator {
             }
 
             (*page_ptr).next = self.root;
+            // Record the exact allocation size so `Drop` can free this page with
+            // the matching `Layout` (pages may be over-sized for a large request).
+            (*page_ptr).alloc_size = layout.size();
             self.root = page_ptr;
             self.offset = size;
 

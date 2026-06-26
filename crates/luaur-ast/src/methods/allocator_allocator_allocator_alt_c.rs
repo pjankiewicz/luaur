@@ -13,17 +13,28 @@ impl Allocator {
             while !page.is_null() {
                 let next = (*page).next;
 
-                // We must calculate the layout used during allocation.
-                // The C++ code uses `operator delete(page)`, which assumes the size
-                // matches the allocation. However, `allocate` can create larger pages.
-                // This implementation assumes standard Page size for simplicity,
-                // matching the C++ `operator delete(page)` behavior on a `Page*`.
-                let layout = Layout::new::<Page>();
+                // Free with the *exact* layout `allocate` used: a page can be
+                // over-sized for a single large allocation, so a fixed
+                // `Layout::new::<Page>()` would mismatch (dealloc with the wrong
+                // size is UB). `alloc_size` was recorded at allocation time.
+                let layout = Layout::from_size_align_unchecked(
+                    (*page).alloc_size,
+                    core::mem::align_of::<Page>(),
+                );
                 dealloc(page as *mut u8, layout);
 
                 page = next;
             }
             self.root = core::ptr::null_mut();
         }
+    }
+}
+
+/// Frees the page list on drop. Without this every parser leaks its arena pages
+/// — caught by the fuzz suite's LeakSanitizer (repeated 8200-byte `Page` leaks
+/// from the `compile` target).
+impl Drop for Allocator {
+    fn drop(&mut self) {
+        self.allocator_allocator_dtor();
     }
 }

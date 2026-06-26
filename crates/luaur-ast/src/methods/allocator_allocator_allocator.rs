@@ -12,6 +12,9 @@ impl Allocator {
                 alloc::alloc::handle_alloc_error(layout);
             }
             (*ptr).next = core::ptr::null_mut();
+            // Record the allocation size so `Drop` frees this initial page with
+            // the matching `Layout` (see `Page::alloc_size`).
+            (*ptr).alloc_size = layout.size();
             Allocator {
                 root: ptr,
                 offset: 0,
