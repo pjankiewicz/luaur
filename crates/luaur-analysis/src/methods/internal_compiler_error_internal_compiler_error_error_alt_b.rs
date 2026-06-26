@@ -5,10 +5,6 @@ impl InternalCompilerError {
         message: alloc::string::String,
         module_name: alloc::string::String,
     ) -> Self {
-        Self {
-            message,
-            module_name: Some(module_name),
-            location: None,
-        }
+        Self::new(message, Some(module_name), None)
     }
 }

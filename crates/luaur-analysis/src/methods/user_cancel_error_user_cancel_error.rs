@@ -5,11 +5,11 @@ use alloc::string::String;
 impl UserCancelError {
     pub fn new(module_name: String) -> Self {
         Self {
-            base: InternalCompilerError {
-                message: String::from("Analysis has been cancelled by user"),
-                module_name: Some(module_name),
-                location: None,
-            },
+            base: InternalCompilerError::new(
+                String::from("Analysis has been cancelled by user"),
+                Some(module_name),
+                None,
+            ),
         }
     }
 }

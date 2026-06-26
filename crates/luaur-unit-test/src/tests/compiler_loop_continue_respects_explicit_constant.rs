@@ -39,4 +39,16 @@ fn compiler_loop_continue_respects_explicit_constant() {
     let expected_msg =
         "Local c used in the repeat..until condition is undefined because continue statement on line 3 jumps over it";
     assert_eq!(msg, expected_msg);
+
+    // Deterministic guard for issue #3's follow-up bug: a Rust `String` is not
+    // NUL-terminated, so `what()` must hand out a terminated buffer or
+    // `CStr::from_ptr` over-reads past the message into adjacent memory (which
+    // failed flakily on Windows). The byte at `message.len()` must be the NUL.
+    unsafe {
+        assert_eq!(
+            *err_str.what().add(expected_msg.len()),
+            0,
+            "CompileError::what() must be NUL-terminated"
+        );
+    }
 }

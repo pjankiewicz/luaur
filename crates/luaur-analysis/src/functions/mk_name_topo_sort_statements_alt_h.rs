@@ -13,11 +13,11 @@ pub fn mk_name_ast_stat_function(function: &AstStatFunction) -> Identifier {
     match name {
         Some(id) => id,
         None => {
-            let err = InternalCompilerError {
-                message: "Internal error: Function declaration has a bad name".to_string(),
-                module_name: None,
-                location: None,
-            };
+            let err = InternalCompilerError::new(
+                "Internal error: Function declaration has a bad name".to_string(),
+                None,
+                None,
+            );
             panic!("{}", unsafe {
                 core::ffi::CStr::from_ptr(err.what()).to_string_lossy()
             });

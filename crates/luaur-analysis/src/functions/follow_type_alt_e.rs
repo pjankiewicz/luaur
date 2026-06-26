@@ -70,11 +70,11 @@ pub unsafe fn follow_full(
             }
 
             if t == cycle_tester {
-                std::panic::panic_any(InternalCompilerError {
-                    message: alloc::string::String::from("Luau::follow detected a Type cycle!!"),
-                    module_name: None,
-                    location: None,
-                });
+                std::panic::panic_any(InternalCompilerError::new(
+                    alloc::string::String::from("Luau::follow detected a Type cycle!!"),
+                    None,
+                    None,
+                ));
             }
         }
     }

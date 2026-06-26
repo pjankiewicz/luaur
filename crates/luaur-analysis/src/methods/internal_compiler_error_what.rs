@@ -4,6 +4,7 @@ use core::ffi::c_char;
 impl InternalCompilerError {
     #[inline]
     pub fn what(&self) -> *const c_char {
-        self.message.as_ptr() as *const c_char
+        // NUL-terminated (see `c_message`): `message.as_ptr()` would over-read.
+        self.c_message.as_ptr()
     }
 }

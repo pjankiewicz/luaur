@@ -8,10 +8,7 @@ impl CompileError {
     /// C++ `static LUAU_NORETURN void raise(const Location&, const char* format, ...)`
     /// Callers pass `format_args!(...)` (the varargs convention).
     pub fn raise(location: &Location, args: core::fmt::Arguments<'_>) -> ! {
-        std::panic::panic_any(CompileError {
-            location: *location,
-            message: alloc::fmt::format(args),
-        })
+        std::panic::panic_any(CompileError::new(*location, alloc::fmt::format(args)))
     }
 }
 
