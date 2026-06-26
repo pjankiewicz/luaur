@@ -32,10 +32,10 @@ implementation is built on raw memory, the answer is aggressive testing — the
 strategy SQLite uses for C. luaur runs the translated unit + conformance suite on
 every change, plus:
 
-- a **coverage-guided fuzzing suite** (`fuzz/`, cargo-fuzz / libFuzzer + ASan)
+- a **coverage-guided fuzzing suite** (`fuzz/`, AFL / cargo-afl, optional ASan)
   porting Luau's own `fuzz/` targets — one per stage (compile, run, type-check,
   number parsing) plus a structured generator and a repeated-`check_with_definitions`
-  target — run on every PR;
+  target — with a toolchain-free standalone mode for plain `cargo` / CI;
 - an in-tree, no-nightly **generative fuzzer** (`crates/luaur-rt/tests/fuzz_generated.rs`)
   that exercises compile + interrupt-bounded execution across Linux/macOS/Windows in CI;
 - a **cache-free cold build** gate so latent compile errors cannot hide behind a warm cache.

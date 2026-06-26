@@ -2,15 +2,19 @@
 // run it on the VM. Execution is bounded by an interrupt step-limit so a
 // generated infinite loop can't hang the fuzzer. The VM must never panic/crash
 // — only return `Ok`/`Err`.
-#![no_main]
 
 use std::cell::Cell;
 use std::rc::Rc;
 
-use libfuzzer_sys::fuzz_target;
+#[cfg(feature = "afl-runtime")]
+use afl::fuzz;
+
+#[cfg(not(feature = "afl-runtime"))]
+include!("standalone.rs");
+
 use luaur_rt::{Lua, Result, VmState};
 
-fuzz_target!(|data: &[u8]| {
+fn exercise_input(data: &[u8]) {
     let Ok(src) = std::str::from_utf8(data) else {
         return;
     };
@@ -29,4 +33,13 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(f) = lua.load(src).set_name("fuzz").into_function() {
         let _ = f.call::<()>(());
     }
-});
+}
+
+fn main() {
+    #[cfg(feature = "afl-runtime")]
+    fuzz!(|data: &[u8]| {
+        exercise_input(data);
+    });
+    #[cfg(not(feature = "afl-runtime"))]
+    standalone_main(exercise_input);
+}

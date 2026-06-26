@@ -1,33 +1,50 @@
-# cargo-fuzz crate — a Rust port of Luau's `fuzz/` suite (libFuzzer targets).
+# AFL fuzz crate — a Rust port of Luau's `fuzz/` suite, driven by AFL (afl.rs).
 # Detached from the parent workspace (own `[workspace]`) and never published, so
-# the nightly + libfuzzer toolchain it needs does not touch the normal build.
+# the AFL toolchain it can use does not touch the normal build.
 #
-#   cargo +nightly fuzz run compile        # parser + compiler (Luau compiler.cpp)
-#   cargo +nightly fuzz run run            # compile + interrupt-bounded VM (kFuzzVM)
-#   cargo +nightly fuzz run typeck         # the type checker (Luau typeck.cpp)
-#   cargo +nightly fuzz run number         # number parsing (Luau number.cpp)
-#   cargo +nightly fuzz run structured     # structured valid-Luau gen (Luau proto.cpp)
+# Two build modes:
+#   * default (`afl-runtime`)        — links the AFL fork-server runtime; built
+#                                       and driven via `cargo afl build` /
+#                                       `cargo afl fuzz` (real-time TUI). See
+#                                       `scripts/run_afl.sh` / `make fuzz-typeck`.
+#   * `--no-default-features`        — a STANDALONE binary needing NO AFL /
+#                                       nightly / sanitizer toolchain. Replays
+#                                       corpus/crash files passed as args, reads
+#                                       one input from stdin (LUAUR_FUZZ_STDIN=1),
+#                                       or generates LUAUR_FUZZ_ITERS pseudo-random
+#                                       inputs from LUAUR_FUZZ_SEED — for smoke
+#                                       fuzzing in plain `cargo` / CI.
 [package]
 name = "luaur-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
 
-[package.metadata]
-cargo-fuzz = true
-
 [dependencies]
-libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
+afl = { version = "0.18", optional = true }
 luaur-rt = { path = "../crates/luaur-rt", features = ["typecheck"] }
 luaur-ast = { path = "../crates/luaur-ast" }
 
-# Detach from the parent workspace so cargo-fuzz's nightly instrumentation is
-# scoped here only.
+[features]
+# `afl-runtime` (default) links the AFL fork-server runtime via `cargo afl build`
+# / `cargo afl fuzz`. Build with `--no-default-features` for the standalone,
+# toolchain-free binary described above.
+default = ["afl-runtime"]
+afl-runtime = ["dep:afl"]
+
+# Detach from the parent workspace so the AFL instrumentation is scoped here only.
 [workspace]
 
 [profile.release]
 debug = 1
+# Fuzz in optimized builds for throughput, but keep the assertion layer ON:
+# luaur's `LUAU_ASSERT`s (and Rust's overflow/bounds checks) are gated on
+# `debug_assertions`, and they catch corruption a bare crash check would miss
+# (they surfaced the `number` base-contract bug). Plain `--release` would be fast
+# but blind; this profile is fast AND checked.
+debug-assertions = true
+overflow-checks = true
 
 [[bin]]
 name = "compile"

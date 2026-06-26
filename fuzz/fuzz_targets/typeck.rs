@@ -3,12 +3,24 @@
 // panic/crash — only return `Ok(())` or `Err(Vec<TypeDiagnostic>)`. (Several of
 // the bugs hardened in this repo lived in the analysis layer, so this target is
 // especially valuable.)
-#![no_main]
 
-use libfuzzer_sys::fuzz_target;
+#[cfg(feature = "afl-runtime")]
+use afl::fuzz;
 
-fuzz_target!(|data: &[u8]| {
+#[cfg(not(feature = "afl-runtime"))]
+include!("standalone.rs");
+
+fn exercise_input(data: &[u8]) {
     if let Ok(src) = std::str::from_utf8(data) {
         let _ = luaur_rt::check(src);
     }
-});
+}
+
+fn main() {
+    #[cfg(feature = "afl-runtime")]
+    fuzz!(|data: &[u8]| {
+        exercise_input(data);
+    });
+    #[cfg(not(feature = "afl-runtime"))]
+    standalone_main(exercise_input);
+}

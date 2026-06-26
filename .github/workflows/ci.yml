@@ -128,12 +128,12 @@ jobs:
       - name: cargo check luaur-rt feature surface (cold)
         run: cargo check -p luaur-rt --all-targets --locked --features send,async,serde,macros,typecheck
 
-  # NOTE: coverage-guided fuzzing (cargo-fuzz / libFuzzer + ASan) is deliberately
-  # NOT a PR gate. A 30-second smoke run isn't fuzzing — real fuzzing is a long
-  # soak with an accumulating corpus — and gating PRs on it makes unrelated
-  # changes flaky whenever the fuzzer wanders into a pre-existing bug. The
-  # cargo-fuzz targets run instead as a scheduled long soak in
-  # `.github/workflows/fuzz.yml` (non-blocking, corpus persisted, crashes uploaded
-  # as artifacts). The deterministic, seeded in-tree generative fuzzer
+  # NOTE: coverage-guided fuzzing (AFL / cargo-afl) is deliberately NOT a PR gate.
+  # A 30-second smoke run isn't fuzzing — real fuzzing is a long soak with an
+  # accumulating corpus — and gating PRs on it makes unrelated changes flaky
+  # whenever the fuzzer wanders into a pre-existing bug. The AFL targets run
+  # locally with a live TUI (`make fuzz-typeck`); their toolchain-free standalone
+  # mode runs as a scheduled long soak in `.github/workflows/fuzz.yml`
+  # (non-blocking). The deterministic, seeded in-tree generative fuzzer
   # (`luaur-rt/tests/fuzz_generated.rs`) DOES run here, in the normal `test` job —
   # it's a fast reproducible test, not a fuzzer.

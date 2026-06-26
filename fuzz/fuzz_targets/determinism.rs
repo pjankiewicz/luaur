@@ -2,11 +2,14 @@
 // results every time. A divergence means hidden nondeterminism (e.g. iteration
 // order leaking into diagnostics, or an uninitialized read) — a correctness bug
 // even when nothing crashes. Complements the "must not crash" targets.
-#![no_main]
 
-use libfuzzer_sys::fuzz_target;
+#[cfg(feature = "afl-runtime")]
+use afl::fuzz;
 
-fuzz_target!(|data: &[u8]| {
+#[cfg(not(feature = "afl-runtime"))]
+include!("standalone.rs");
+
+fn exercise_input(data: &[u8]) {
     let src = luaur_fuzz::generate(data);
 
     // Type-checking is a pure function of the source: same in, same out.
@@ -24,4 +27,13 @@ fuzz_target!(|data: &[u8]| {
         lua.load(&src).set_name("fuzz").into_function().is_ok()
     };
     assert_eq!(c1, c2, "compile result differs across runs for:\n{src}");
-});
+}
+
+fn main() {
+    #[cfg(feature = "afl-runtime")]
+    fuzz!(|data: &[u8]| {
+        exercise_input(data);
+    });
+    #[cfg(not(feature = "afl-runtime"))]
+    standalone_main(exercise_input);
+}

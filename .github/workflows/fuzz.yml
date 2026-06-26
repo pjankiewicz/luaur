@@ -1,12 +1,17 @@
-# Long-soak coverage-guided fuzzing (cargo-fuzz / libFuzzer + ASan).
+# Long-soak fuzzing — the standalone (toolchain-free) mode of the AFL fuzz crate.
 #
-# This is deliberately separate from `ci.yml` and is NEVER a PR gate. A fuzzer is
-# only meaningful over a long run with an accumulating corpus; gating PRs on a
-# 30-second smoke run is theatre, and makes unrelated PRs flaky the moment the
-# fuzzer rediscovers a pre-existing bug. So we run it on a schedule (and on
-# demand), persist each target's corpus across runs so coverage compounds, and
-# upload any crash/leak reproducer as an artifact. A failure here is a
-# notification to investigate — it does not block development.
+# This is deliberately separate from `ci.yml` and is NEVER a PR gate. Each target
+# is built with `--no-default-features` (NO AFL / nightly / sanitizer toolchain)
+# and run over a large batch of pseudo-random inputs. The seed is derived from
+# the run id, so every scheduled run explores a different slice of the input
+# space. A panic / assertion break exits non-zero and prints a reproducible hex
+# dump of the offending input into the job log. A failure here is a notification
+# to investigate — it does not block development.
+#
+# (Coverage-guided fuzzing with AFL's live TUI is a *local* workflow — see
+# `make fuzz-typeck` / `fuzz/README.md`. AFL needs its fork-server runtime, an
+# instrumented build, and kernel core_pattern tuning, none of which belong in a
+# hands-off scheduled job; the deterministic standalone mode is the CI surface.)
 name: Fuzz (long soak)
 
 on:
@@ -15,10 +20,10 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
-      seconds_per_target:
-        description: "Soak time per target, in seconds"
+      iters_per_target:
+        description: "Pseudo-random inputs per target"
         required: false
-        default: "1200"
+        default: "50000"
 
 concurrency:
   # Never run two soaks at once; a newer one supersedes an in-flight one.
@@ -32,7 +37,7 @@ jobs:
   soak:
     name: soak ${{ matrix.target }}
     runs-on: ubuntu-latest
-    # Generous ceiling; the per-target time budget below is the real limit.
+    # Per-target ceiling; each matrix target is its own job.
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -40,46 +45,22 @@ jobs:
         target: [compile, run, typeck, typeck_defs, number, structured, determinism]
     steps:
       - uses: actions/checkout@v4
-      - name: Install nightly Rust
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo + fuzz build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "fuzz"
-      - name: Install cargo-fuzz
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz
-      - name: Install llvm-symbolizer
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq llvm
-      # Persist (and accumulate) this target's corpus across scheduled runs so
-      # coverage compounds over time. The unique key always saves a fresh entry;
-      # restore-keys pulls the most recent prior corpus to build on.
-      - name: Restore corpus
-        uses: actions/cache@v4
-        with:
-          path: fuzz/corpus/${{ matrix.target }}
-          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
-          restore-keys: |
-            fuzz-corpus-${{ matrix.target }}-
-      # cargo-fuzz defaults `--target` to the triple it was itself built for
-      # (taiki-e ships a musl-static binary), whose static libc ASan rejects;
-      # pin the runner's dynamic-libc gnu host instead.
-      - name: Build target
-        run: cargo +nightly fuzz build ${{ matrix.target }} --target x86_64-unknown-linux-gnu
+      - name: Build standalone target
         working-directory: fuzz
+        run: cargo build --no-default-features --bin ${{ matrix.target }}
       - name: Soak
         working-directory: fuzz
+        env:
+          # Different seed each run so coverage of the input space compounds over
+          # scheduled runs; iteration count is overridable on manual dispatch.
+          LUAUR_FUZZ_SEED: ${{ github.run_id }}
+          LUAUR_FUZZ_ITERS: ${{ github.event.inputs.iters_per_target || '50000' }}
         run: |
-          export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer || ls /usr/bin/llvm-symbolizer* 2>/dev/null | head -1)"
-          secs="${{ github.event.inputs.seconds_per_target || '1200' }}"
-          echo "Soaking '${{ matrix.target }}' for ${secs}s (symbolizer: $ASAN_SYMBOLIZER_PATH)"
-          cargo +nightly fuzz run ${{ matrix.target }} --target x86_64-unknown-linux-gnu \
-            -- -max_total_time="$secs" -rss_limit_mb=4096 -print_final_stats=1
-      - name: Upload crash reproducers
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-artifacts-${{ matrix.target }}
-          path: fuzz/artifacts/${{ matrix.target }}/
-          if-no-files-found: ignore
+          echo "Soaking '${{ matrix.target }}' for ${LUAUR_FUZZ_ITERS} inputs (seed ${LUAUR_FUZZ_SEED})"
+          ./target/debug/${{ matrix.target }}

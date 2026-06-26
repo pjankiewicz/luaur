@@ -1,17 +1,22 @@
 // Port of Luau's `fuzz/proto.cpp`: structured generation. Rather than feeding
 // raw bytes at the parser, the bytes drive a grammar that emits syntactically
-// valid Luau (see `luaur_fuzz::generate`), so the input reaches deep into the
-// compiler + VM while libFuzzer's coverage feedback steers generation. Compile
-// and (if it compiles) run under an interrupt step-limit; must never crash.
-#![no_main]
+// valid Luau (see `luaur_fuzz::generate`, which builds an `Unstructured` over the
+// bytes), so the input reaches deep into the compiler + VM while AFL's coverage
+// feedback steers generation. Compile and (if it compiles) run under an interrupt
+// step-limit; must never crash.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
-use libfuzzer_sys::fuzz_target;
+#[cfg(feature = "afl-runtime")]
+use afl::fuzz;
+
+#[cfg(not(feature = "afl-runtime"))]
+include!("standalone.rs");
+
 use luaur_rt::{Lua, Result, VmState};
 
-fuzz_target!(|data: &[u8]| {
+fn exercise_input(data: &[u8]) {
     let src = luaur_fuzz::generate(data);
 
     let lua = Lua::new();
@@ -33,4 +38,13 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(f) = lua.load(&src).set_name("fuzz").into_function() {
         let _ = f.call::<()>(());
     }
-});
+}
+
+fn main() {
+    #[cfg(feature = "afl-runtime")]
+    fuzz!(|data: &[u8]| {
+        exercise_input(data);
+    });
+    #[cfg(not(feature = "afl-runtime"))]
+    standalone_main(exercise_input);
+}
