@@ -151,14 +151,19 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
+      # Force the gnu target: cargo-fuzz defaults `--target` to the triple it was
+      # *itself* built for, and taiki-e/install-action ships a musl-static
+      # cargo-fuzz binary — so the default lands on x86_64-unknown-linux-musl,
+      # whose statically-linked libc AddressSanitizer rejects. The gnu target is
+      # the runner's host (already installed) and links libc dynamically.
       - name: Build all fuzz targets
-        run: cargo +nightly fuzz build
+        run: cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
         working-directory: fuzz
       - name: Smoke-run each target (30s, ASan on)
         working-directory: fuzz
         run: |
           for t in compile run typeck typeck_defs number structured determinism; do
             echo "::group::fuzz $t"
-            cargo +nightly fuzz run "$t" -- -max_total_time=30 -rss_limit_mb=4096
+            cargo +nightly fuzz run "$t" --target x86_64-unknown-linux-gnu -- -max_total_time=30 -rss_limit_mb=4096
             echo "::endgroup::"
           done
