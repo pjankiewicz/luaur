@@ -57,13 +57,11 @@ pub unsafe fn follow_pack_full(
             }
 
             if tp == cycle_tester {
-                std::panic::panic_any(InternalCompilerError {
-                    message: alloc::string::String::from(
-                        "Luau::follow detected a TypePack cycle!!",
-                    ),
-                    module_name: None,
-                    location: None,
-                });
+                std::panic::panic_any(InternalCompilerError::new(
+                    alloc::string::String::from("Luau::follow detected a TypePack cycle!!"),
+                    None,
+                    None,
+                ));
             }
         }
     }

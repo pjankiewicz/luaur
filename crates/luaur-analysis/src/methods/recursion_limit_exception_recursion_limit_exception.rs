@@ -6,11 +6,11 @@ use alloc::string::String;
 impl RecursionLimitException {
     pub fn new(system: &str) -> Self {
         Self {
-            base: InternalCompilerError {
-                message: format!("Internal recursion counter limit exceeded in {}", system),
-                module_name: None,
-                location: None,
-            },
+            base: InternalCompilerError::new(
+                format!("Internal recursion counter limit exceeded in {}", system),
+                None,
+                None,
+            ),
         }
     }
 }

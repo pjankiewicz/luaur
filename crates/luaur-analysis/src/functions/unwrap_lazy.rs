@@ -20,19 +20,19 @@ pub unsafe fn unwrapLazy(ltv: *mut LazyType) -> TypeId {
     unwrapped = (*ltv).unwrapped;
 
     if unwrapped.is_null() {
-        std::panic::panic_any(InternalCompilerError {
-            message: alloc::string::String::from("Lazy Type didn't fill in unwrapped type field"),
-            module_name: None,
-            location: None,
-        });
+        std::panic::panic_any(InternalCompilerError::new(
+            alloc::string::String::from("Lazy Type didn't fill in unwrapped type field"),
+            None,
+            None,
+        ));
     }
 
     if !get::<LazyType>(unwrapped).is_null() {
-        std::panic::panic_any(InternalCompilerError {
-            message: alloc::string::String::from("Lazy Type cannot resolve to another Lazy Type"),
-            module_name: None,
-            location: None,
-        });
+        std::panic::panic_any(InternalCompilerError::new(
+            alloc::string::String::from("Lazy Type cannot resolve to another Lazy Type"),
+            None,
+            None,
+        ));
     }
 
     unwrapped
