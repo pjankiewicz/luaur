@@ -62,13 +62,16 @@ jobs:
         run: cargo nextest run --workspace --locked
 
       # The opt-in feature surface and doctests are platform-agnostic Rust; run
-      # them once (on Linux) to keep CI minutes down. async and send are mutually
-      # exclusive, so they go as two invocations. typecheck pulls the type checker.
+      # them once (on Linux) to keep CI minutes down. `async` and `send` now
+      # compose, so the matrix covers async-side, send-alone, AND send+async
+      # together (the combination that used to be a compile_error). typecheck
+      # pulls the type checker.
       - name: Test luaur-rt feature combos
         if: runner.os == 'Linux'
         run: |
           cargo nextest run -p luaur-rt --locked --features async,serde,macros,typecheck
           cargo nextest run -p luaur-rt --locked --features send,typecheck
+          cargo nextest run -p luaur-rt --locked --features send,async,serde,macros,typecheck
 
       - name: Doctests (luaur + luaur-rt)
         if: runner.os == 'Linux'
