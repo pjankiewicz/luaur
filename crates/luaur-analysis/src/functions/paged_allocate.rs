@@ -19,6 +19,14 @@ extern "C" {
 /// on FreeBSD, 4096 on Win32.
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn page_size() -> usize {
+    // Under Miri there is no real OS page table and `sysconf` is an unsupported
+    // foreign call; a fixed 4 KiB page (a valid power-of-two alignment) lets the
+    // UB checker exercise the arena via the std allocator path below.
+    #[cfg(miri)]
+    {
+        return 4096;
+    }
+
     #[cfg(target_os = "freebsd")]
     {
         extern "C" {
