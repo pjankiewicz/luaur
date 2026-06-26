@@ -40,8 +40,8 @@ default = ["typecheck", "cli"]
 # The installable command-line binary (script runner / REPL). Pulls luaur-repl-cli.
 cli = ["dep:luaur-repl-cli", "luaur-repl-cli/cli"]
 # Mirror luaur-rt's opt-in flags so `luaur = { features = ["serde"] }` works the
-# same as depending on luaur-rt directly. async and send are mutually exclusive
-# (enforced in luaur-rt).
+# same as depending on luaur-rt directly. `async` and `send` compose (see
+# luaur-rt's `send` feature note).
 async = ["luaur-rt/async"]
 serde = ["luaur-rt/serde"]
 send = ["luaur-rt/send"]
@@ -50,8 +50,8 @@ macros = ["luaur-rt/macros"]
 # `default`; named here so `default-features = false` users can opt back in.
 typecheck = ["luaur-rt/typecheck"]
 
-# Not `all-features`: async and send are mutually exclusive. Document the
-# async-side superset (serde + async + macros).
+# Document the async-side superset (serde + async + macros) on docs.rs. (`send`
+# is omitted only because the rendered docs read the same with or without it.)
 [package.metadata.docs.rs]
 features = ["serde", "async", "macros"]
 rustdoc-args = ["--cfg", "docsrs"]

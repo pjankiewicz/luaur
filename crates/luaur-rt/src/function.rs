@@ -193,7 +193,9 @@ impl Function {
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn wrap_async<F, A, R, E>(func: F) -> impl crate::traits::IntoLua
     where
-        F: crate::async_support::LuaNativeAsyncFn<A, Output = std::result::Result<R, E>> + 'static,
+        F: crate::async_support::LuaNativeAsyncFn<A, Output = std::result::Result<R, E>>
+            + crate::sync::MaybeSend
+            + 'static,
         A: FromLuaMulti,
         R: IntoLuaMulti + 'static,
         E: crate::error::ExternalError + 'static,
@@ -213,7 +215,7 @@ impl Function {
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn wrap_raw_async<F, A>(func: F) -> impl crate::traits::IntoLua
     where
-        F: crate::async_support::LuaNativeAsyncFn<A> + 'static,
+        F: crate::async_support::LuaNativeAsyncFn<A> + crate::sync::MaybeSend + 'static,
         F::Output: IntoLuaMulti + 'static,
         A: FromLuaMulti,
     {

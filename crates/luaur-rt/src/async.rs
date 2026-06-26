@@ -55,7 +55,6 @@
 
 #![cfg(feature = "async")]
 
-use std::cell::RefCell;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -65,16 +64,34 @@ use crate::error::{Error, Result};
 use crate::function::Function;
 use crate::multi::MultiValue;
 use crate::state::Lua;
+use crate::sync::MaybeSend;
 use crate::sys::*;
 use crate::table::Table;
 use crate::thread::{AsyncResume, Thread};
 use crate::traits::{FromLuaMulti, IntoLuaMulti};
 
+/// A pinned, boxed future of (already `MultiValue`-converted) async-callback
+/// results. Under the `send` feature it is additionally `Send` so the future
+/// can be stashed inside the (movable) VM and the whole VM stay `Send`; without
+/// the feature it is a plain local future, byte-identical to before. Mirrors how
+/// [`crate::callback::BoxedCallback`] gates its `Send` bound (and mlua's
+/// `BoxFuture`).
+#[cfg(feature = "send")]
+pub(crate) type LocalResultFuture =
+    Pin<Box<dyn Future<Output = Result<MultiValue>> + Send>>;
+/// See the `send`-gated variant above.
+#[cfg(not(feature = "send"))]
+pub(crate) type LocalResultFuture = Pin<Box<dyn Future<Output = Result<MultiValue>>>>;
+
 /// The type-erased async callback: given the calling `Lua` and the call
 /// arguments, it produces a pinned, boxed future of the (already
-/// `MultiValue`-converted) results.
-pub(crate) type AsyncCallback =
-    Box<dyn Fn(Lua, MultiValue) -> Pin<Box<dyn Future<Output = Result<MultiValue>>>>>;
+/// `MultiValue`-converted) results. `Send` under the `send` feature (the box
+/// and its captured environment), matching [`crate::callback::BoxedCallback`].
+#[cfg(feature = "send")]
+pub(crate) type AsyncCallback = Box<dyn Fn(Lua, MultiValue) -> LocalResultFuture + Send>;
+/// See the `send`-gated variant above.
+#[cfg(not(feature = "send"))]
+pub(crate) type AsyncCallback = Box<dyn Fn(Lua, MultiValue) -> LocalResultFuture>;
 
 // ---------------------------------------------------------------------------
 // Poll markers (process-unique light-userdata sentinels)
@@ -106,86 +123,153 @@ pub(crate) fn poll_terminate() -> *mut c_void {
 }
 
 // ---------------------------------------------------------------------------
-// Thread-local waker slot
+// Per-VM async state: the active waker + the implicit-thread ownership map
 // ---------------------------------------------------------------------------
 //
-// mlua stores the current `Waker` in the per-`Lua` `extra` block. luaur-rt's
-// `Lua` has no such block, so we keep the active waker in a thread-local. Since
-// `Lua` is `!Send`, a coroutine is always resumed on the thread that owns it,
-// and only one resume is ever in flight on a given thread at a time (resuming a
-// coroutine is synchronous), so a single-slot thread-local is sufficient and
-// race-free. Nested async calls push/pop via the guard.
+// mlua keeps both the current `Waker` and the `thread_ownership_map` in the
+// per-`Lua` `extra` block, so they are reachable from any coroutine state of the
+// VM and travel with the VM when it is moved across threads under `send`.
+// luaur-rt's `Lua` has no such block, so we keep them in a process-wide table
+// keyed by the VM's **global-state pointer** — the same VM-identity key the
+// `app_data` store uses (`(*state).global`), reachable from any of the VM's
+// coroutine states.
+//
+// * Under `send` the table is a real global `Mutex` (NOT a thread-local): the
+//   VM can be created on one thread and driven on another, so a thread-local
+//   would be left behind on the origin thread (the soundness gap that used to
+//   force `send` and `async` to be mutually exclusive). Different VMs may be
+//   driven on different threads concurrently, so the table itself needs a lock;
+//   per-VM access stays serialized by the `send` contract. The stored `Waker`
+//   is `Send + Sync`; coroutine-state pointers are stored as `usize` (compared
+//   only, and cast back to `*mut lua_State` solely to push the owner thread).
+// * Without `send` it is a thread-local (single-threaded, zero-cost), matching
+//   the original behavior plus per-VM keying.
 
-thread_local! {
-    static CURRENT_WAKER: RefCell<Option<Waker>> = const { RefCell::new(None) };
+use std::collections::HashMap;
+
+/// Per-VM async state: the waker installed for the current resume and the
+/// implicit-thread ownership map (`co_state addr -> owner_state addr`).
+#[derive(Default)]
+struct AsyncVmState {
+    waker: Option<Waker>,
+    ownership: HashMap<usize, usize>,
+}
+
+/// The VM-identity key: the global-state pointer as an integer (process-unique,
+/// stable for the VM's lifetime, `Send`). Mirrors `app_data`'s `vm_key`.
+#[inline]
+unsafe fn vm_key(state: *mut lua_State) -> usize {
+    unsafe { (*state).global as usize }
+}
+
+#[cfg(feature = "send")]
+mod async_store {
+    use super::AsyncVmState;
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+
+    static STORE: LazyLock<Mutex<HashMap<usize, AsyncVmState>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    /// Run `f` with exclusive access to the global async-state table.
+    pub(super) fn with<R>(f: impl FnOnce(&mut HashMap<usize, AsyncVmState>) -> R) -> R {
+        // Recover from poisoning: a panic mid-update leaves the map usable.
+        let mut guard = STORE.lock().unwrap_or_else(|e| e.into_inner());
+        f(&mut guard)
+    }
+}
+
+#[cfg(not(feature = "send"))]
+mod async_store {
+    use super::AsyncVmState;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    thread_local! {
+        static STORE: RefCell<HashMap<usize, AsyncVmState>> = RefCell::new(HashMap::new());
+    }
+
+    pub(super) fn with<R>(f: impl FnOnce(&mut HashMap<usize, AsyncVmState>) -> R) -> R {
+        STORE.with(|s| f(&mut s.borrow_mut()))
+    }
 }
 
 /// Install `waker` as the current waker for the duration of a resume, restoring
-/// the previous one on drop. Returned by [`set_current_waker`].
+/// the previous one on drop. Returned by [`set_current_waker`]. Nested async
+/// calls push/pop via the guard.
 pub(crate) struct WakerGuard {
+    key: usize,
     prev: Option<Waker>,
 }
 
 impl Drop for WakerGuard {
     fn drop(&mut self) {
-        CURRENT_WAKER.with(|w| {
-            *w.borrow_mut() = self.prev.take();
+        let key = self.key;
+        let prev = self.prev.take();
+        async_store::with(|m| {
+            if let Some(s) = m.get_mut(&key) {
+                s.waker = prev;
+            }
         });
     }
 }
 
-/// Set the current waker, returning a guard that restores the previous one.
-pub(crate) fn set_current_waker(waker: Waker) -> WakerGuard {
-    let prev = CURRENT_WAKER.with(|w| w.borrow_mut().replace(waker));
-    WakerGuard { prev }
-}
-
-// ---------------------------------------------------------------------------
-// Implicit-thread ownership map (for `Lua::current_thread`)
-// ---------------------------------------------------------------------------
-//
-// A coroutine created implicitly by `call_async` should be "transparent" to
-// `Lua::current_thread`: code running on it sees the *owner* (the thread that
-// issued the `call_async`), not the implicit coroutine. We track that mapping in
-// a thread-local, exactly mirroring mlua's `thread_ownership_map`. The map is
-// keyed by raw coroutine state pointers; entries are removed when the driving
-// `AsyncThread` is dropped, so a pointer is never resolved after its coroutine
-// is gone.
-
-thread_local! {
-    static THREAD_OWNERSHIP: RefCell<std::collections::HashMap<*mut lua_State, *mut lua_State>> =
-        RefCell::new(std::collections::HashMap::new());
+/// Set the current waker for `state`'s VM, returning a guard that restores the
+/// previous one. Keyed by the VM global state, so it is found again from any
+/// coroutine state during the resume.
+pub(crate) fn set_current_waker(state: *mut lua_State, waker: Waker) -> WakerGuard {
+    let key = unsafe { vm_key(state) };
+    let prev = async_store::with(|m| m.entry(key).or_default().waker.replace(waker));
+    WakerGuard { key, prev }
 }
 
 /// Register `co_state` as an implicit thread owned (transitively) by `owner`.
 pub(crate) fn register_implicit_thread(co_state: *mut lua_State, owner: *mut lua_State) {
-    THREAD_OWNERSHIP.with(|m| {
-        let mut m = m.borrow_mut();
+    let key = unsafe { vm_key(co_state) };
+    let owner = owner as usize;
+    async_store::with(|m| {
+        let s = m.entry(key).or_default();
         // Chain to the root owner if `owner` is itself implicit.
-        let root = m.get(&owner).copied().unwrap_or(owner);
-        m.insert(co_state, root);
+        let root = s.ownership.get(&owner).copied().unwrap_or(owner);
+        s.ownership.insert(co_state as usize, root);
     });
 }
 
 /// Forget the implicit-thread registration for `co_state` (on driver drop).
 pub(crate) fn unregister_implicit_thread(co_state: *mut lua_State) {
-    THREAD_OWNERSHIP.with(|m| {
-        m.borrow_mut().remove(&co_state);
+    let key = unsafe { vm_key(co_state) };
+    async_store::with(|m| {
+        if let Some(s) = m.get_mut(&key) {
+            s.ownership.remove(&(co_state as usize));
+        }
     });
 }
 
 /// The owner state for `state`, if `state` is a registered implicit thread.
 pub(crate) fn implicit_thread_owner(state: *mut lua_State) -> Option<*mut lua_State> {
-    THREAD_OWNERSHIP.with(|m| m.borrow().get(&state).copied())
+    let key = unsafe { vm_key(state) };
+    async_store::with(|m| {
+        m.get(&key)
+            .and_then(|s| s.ownership.get(&(state as usize)).copied())
+            .map(|p| p as *mut lua_State)
+    })
 }
 
-/// A clone of the current waker, or a no-op waker if none is installed (e.g. the
-/// async function was resumed synchronously via `Thread::resume`, matching
-/// mlua's "noop waker outside an executor" behavior).
-fn current_waker() -> Waker {
-    CURRENT_WAKER
-        .with(|w| w.borrow().clone())
-        .unwrap_or_else(noop_waker)
+/// Drop this VM's entire async-state entry. Called from `LuaInner::drop` (the
+/// global state is still valid there), mirroring `app_data::clear_app_data`.
+pub(crate) fn clear_async_state(state: *mut lua_State) {
+    let key = unsafe { vm_key(state) };
+    async_store::with(|m| {
+        m.remove(&key);
+    });
+}
+
+/// A clone of the current waker for `state`'s VM, or a no-op waker if none is
+/// installed (e.g. the async function was resumed synchronously via
+/// `Thread::resume`, matching mlua's "noop waker outside an executor" behavior).
+fn current_waker(state: *mut lua_State) -> Waker {
+    let key = unsafe { vm_key(state) };
+    async_store::with(|m| m.get(&key).and_then(|s| s.waker.clone())).unwrap_or_else(noop_waker)
 }
 
 /// A waker that does nothing when woken.
@@ -208,7 +292,7 @@ fn noop_waker() -> Waker {
 /// The userdata holding the in-flight future for one async call. `data` is
 /// `None` once the future has completed or been terminated.
 struct AsyncPollUpvalue {
-    data: Option<Pin<Box<dyn Future<Output = Result<MultiValue>>>>>,
+    data: Option<LocalResultFuture>,
 }
 
 /// Destructor for the [`AsyncPollUpvalue`] userdata: drops the boxed future
@@ -309,7 +393,7 @@ unsafe fn poll_c(state: *mut lua_State) -> c_int {
 
         let lua = Lua::from_borrowed(state);
 
-        let waker = current_waker();
+        let waker = current_waker(state);
         let mut cx = std::task::Context::from_waker(&waker);
 
         let poll = match future.data.as_mut() {
@@ -517,14 +601,24 @@ impl Lua {
     ///
     /// Mirrors `mlua::Lua::yield_with`. Only valid inside a function created
     /// with [`Lua::create_async_function`] that is being driven on a coroutine.
+    ///
+    /// Returns an owning `'static` future (rather than being an `async fn`): the
+    /// only step that borrows `self` is the eager argument conversion, so the
+    /// future itself owns just a `Lua` clone and borrows nothing. That keeps it
+    /// `Send` under the `send` feature — which is required because the future is
+    /// stored inside the (movable) VM. An `async fn(&self)` would instead capture
+    /// `&self` across the await and demand `Lua: Sync`, which luaur-rt
+    /// deliberately is **not** (its move-only, never-shared contract).
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
-    pub async fn yield_with<R: crate::traits::FromLuaMulti>(
+    pub fn yield_with<R: crate::traits::FromLuaMulti + 'static>(
         &self,
         args: impl IntoLuaMulti,
-    ) -> Result<R> {
+    ) -> impl std::future::Future<Output = Result<R>> + 'static {
         let lua = self.clone();
-        let mut args = Some(args.into_lua_multi(self)?);
-        std::future::poll_fn(move |_cx| {
+        let args = args.into_lua_multi(self);
+        async move {
+            let mut args = Some(args?);
+            std::future::poll_fn(move |_cx| {
             use std::task::Poll;
             match args.take() {
                 // First poll: push the yield marker + the values + the count so
@@ -590,8 +684,9 @@ impl Lua {
                     Poll::Ready(result)
                 }
             }
-        })
-        .await
+            })
+            .await
+        }
     }
 }
 
@@ -603,26 +698,34 @@ impl Lua {
 /// abstracting over arity. Mirrors `mlua::LuaNativeAsyncFn`. Lets
 /// [`Function::wrap_async`](crate::Function::wrap_async) accept `||`, `|a|`,
 /// `|a, b|`, … closures uniformly.
+/// A pinned, boxed future of an arbitrary output, `Send` under the `send`
+/// feature (so a wrapped async closure's future can live in the movable VM).
+#[cfg(feature = "send")]
+pub type BoxedAsyncFnFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
+/// See the `send`-gated variant above.
+#[cfg(not(feature = "send"))]
+pub type BoxedAsyncFnFuture<T> = Pin<Box<dyn Future<Output = T>>>;
+
 pub trait LuaNativeAsyncFn<A: FromLuaMulti> {
     /// The (non-`Future`) output type produced by the returned future.
     type Output;
 
     /// Invoke the closure with the converted args, returning its future.
-    fn call(&self, args: A) -> Pin<Box<dyn Future<Output = Self::Output>>>;
+    fn call(&self, args: A) -> BoxedAsyncFnFuture<Self::Output>;
 }
 
 macro_rules! impl_lua_native_async_fn {
     ($($A:ident),*) => {
         impl<FN, $($A,)* Fut, R> LuaNativeAsyncFn<($($A,)*)> for FN
         where
-            FN: Fn($($A,)*) -> Fut + 'static,
+            FN: Fn($($A,)*) -> Fut + MaybeSend + 'static,
             ($($A,)*): FromLuaMulti,
-            Fut: Future<Output = R> + 'static,
+            Fut: Future<Output = R> + MaybeSend + 'static,
         {
             type Output = R;
 
             #[allow(non_snake_case)]
-            fn call(&self, args: ($($A,)*)) -> Pin<Box<dyn Future<Output = R>>> {
+            fn call(&self, args: ($($A,)*)) -> BoxedAsyncFnFuture<R> {
                 let ($($A,)*) = args;
                 Box::pin(self($($A,)*))
             }
@@ -657,9 +760,9 @@ pub struct WrappedAsync<F, A, FR, R> {
 
 impl<F, A, FR, R> WrappedAsync<F, A, FR, R>
 where
-    F: Fn(Lua, A) -> FR + 'static,
+    F: Fn(Lua, A) -> FR + MaybeSend + 'static,
     A: FromLuaMulti,
-    FR: Future<Output = Result<R>> + 'static,
+    FR: Future<Output = Result<R>> + MaybeSend + 'static,
     R: crate::traits::IntoLuaMulti,
 {
     pub(crate) fn new(func: F) -> Self {
@@ -672,9 +775,9 @@ where
 
 impl<F, A, FR, R> crate::traits::IntoLua for WrappedAsync<F, A, FR, R>
 where
-    F: Fn(Lua, A) -> FR + 'static,
+    F: Fn(Lua, A) -> FR + MaybeSend + 'static,
     A: FromLuaMulti,
-    FR: Future<Output = Result<R>> + 'static,
+    FR: Future<Output = Result<R>> + MaybeSend + 'static,
     R: crate::traits::IntoLuaMulti,
 {
     fn into_lua(self, lua: &Lua) -> Result<crate::value::Value> {
@@ -767,7 +870,7 @@ impl<R: FromLuaMulti> Future for AsyncThread<R> {
             return Poll::Ready(Err(Error::CoroutineUnresumable));
         }
         let lua = this.thread.lua();
-        let _wg = set_current_waker(cx.waker().clone());
+        let _wg = set_current_waker(lua.state(), cx.waker().clone());
 
         let args = this.take_args();
         match this.thread.resume_for_async(args) {
@@ -802,7 +905,7 @@ impl<R: FromLuaMulti> futures_util::stream::Stream for AsyncThread<R> {
             return Poll::Ready(None);
         }
         let lua = this.thread.lua();
-        let _wg = set_current_waker(cx.waker().clone());
+        let _wg = set_current_waker(lua.state(), cx.waker().clone());
 
         let args = this.take_args();
         match this.thread.resume_for_async(args) {

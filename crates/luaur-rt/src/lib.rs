@@ -70,17 +70,12 @@
 
 #![forbid(unsafe_op_in_unsafe_fn)]
 
-// The `send` and `async` features are currently mutually exclusive. luaur-rt's
-// async bridge relies on thread-local waker/ownership maps and non-`Send`
-// `Pin<Box<dyn Future>>` callbacks; making the `send`+`async` combination sound
-// is deferred (see `Cargo.toml`). `send` alone — the core `Send` handles that
-// `tests/send.rs` checks — is fully supported.
-#[cfg(all(feature = "send", feature = "async"))]
-compile_error!(
-    "the `send` and `async` features are mutually exclusive in luaur-rt for now: \
-     making the async bridge (thread-local wakers + non-Send futures) `Send` is deferred. \
-     Enable one or the other, not both."
-);
+// `send` + `async` now compose. The async bridge keeps its per-VM waker +
+// implicit-thread ownership map in a process-wide table keyed by the VM's
+// global-state pointer (a real `Mutex` under `send`, a thread-local otherwise),
+// so the state travels with the VM across thread moves; the type-erased async
+// callback / future boxes carry a `MaybeSend` bound (`+ Send` under `send`)
+// exactly like the synchronous callbacks. See `async.rs` + `sync.rs`.
 
 mod app_data;
 #[cfg(feature = "async")]

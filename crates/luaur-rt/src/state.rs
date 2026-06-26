@@ -76,6 +76,10 @@ impl Drop for LuaInner {
             // Drop this VM's application-data store before closing the state
             // (it is keyed by the global-state pointer, still valid here).
             crate::app_data::clear_app_data(self.state);
+            // Likewise drop this VM's async-state entry (waker + implicit-thread
+            // ownership map), also keyed by the still-valid global-state pointer.
+            #[cfg(feature = "async")]
+            crate::async_support::clear_async_state(self.state);
             unsafe {
                 // Reset the active memory category to 0 ("main") before closing.
                 // `Lua::set_memory_category` may have left a non-main category
@@ -432,9 +436,9 @@ impl Lua {
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn create_async_function<F, A, FR, R>(&self, func: F) -> Result<Function>
     where
-        F: Fn(Lua, A) -> FR + 'static,
+        F: Fn(Lua, A) -> FR + MaybeSend + 'static,
         A: FromLuaMulti,
-        FR: std::future::Future<Output = Result<R>> + 'static,
+        FR: std::future::Future<Output = Result<R>> + MaybeSend + 'static,
         R: IntoLuaMulti,
     {
         let callback: crate::async_support::AsyncCallback = Box::new(move |lua, args| {
