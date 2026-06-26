@@ -77,8 +77,7 @@ use crate::traits::{FromLuaMulti, IntoLuaMulti};
 /// [`crate::callback::BoxedCallback`] gates its `Send` bound (and mlua's
 /// `BoxFuture`).
 #[cfg(feature = "send")]
-pub(crate) type LocalResultFuture =
-    Pin<Box<dyn Future<Output = Result<MultiValue>> + Send>>;
+pub(crate) type LocalResultFuture = Pin<Box<dyn Future<Output = Result<MultiValue>> + Send>>;
 /// See the `send`-gated variant above.
 #[cfg(not(feature = "send"))]
 pub(crate) type LocalResultFuture = Pin<Box<dyn Future<Output = Result<MultiValue>>>>;
@@ -619,71 +618,71 @@ impl Lua {
         async move {
             let mut args = Some(args?);
             std::future::poll_fn(move |_cx| {
-            use std::task::Poll;
-            match args.take() {
-                // First poll: push the yield marker + the values + the count so
-                // `poll_c` recognises a value-carrying yield, then report Pending.
-                Some(values) => {
-                    let state = lua.state();
-                    unsafe {
-                        lua_pushlightuserdatatagged(state, poll_yield(), 0);
-                        let count = values.len() as c_int;
-                        if count <= 1 {
-                            // Single value (or none): push it directly.
-                            match values.iter().next() {
-                                Some(v) => {
-                                    if lua.push_value(v).is_err() {
-                                        return Poll::Ready(Err(Error::runtime(
-                                            "luaur-rt: failed to push yield value",
-                                        )));
+                use std::task::Poll;
+                match args.take() {
+                    // First poll: push the yield marker + the values + the count so
+                    // `poll_c` recognises a value-carrying yield, then report Pending.
+                    Some(values) => {
+                        let state = lua.state();
+                        unsafe {
+                            lua_pushlightuserdatatagged(state, poll_yield(), 0);
+                            let count = values.len() as c_int;
+                            if count <= 1 {
+                                // Single value (or none): push it directly.
+                                match values.iter().next() {
+                                    Some(v) => {
+                                        if lua.push_value(v).is_err() {
+                                            return Poll::Ready(Err(Error::runtime(
+                                                "luaur-rt: failed to push yield value",
+                                            )));
+                                        }
+                                    }
+                                    None => lua_pushnil(state),
+                                }
+                            } else {
+                                // Multiple: pack into a sequence table.
+                                match lua.create_sequence_from(values) {
+                                    Ok(t) => t.push_to_stack(),
+                                    Err(e) => return Poll::Ready(Err(e)),
+                                }
+                            }
+                            lua_pushinteger(state, count);
+                        }
+                        Poll::Pending
+                    }
+                    // Second poll (after resume): collect the resume values.
+                    //
+                    // We are running inside `poll(future, <resume values>)`, so the
+                    // coroutine stack is `[future, resume1, resume2, ...]`. The
+                    // resume values are at indices 2..=top; index 1 (the future) is
+                    // *not* a result and must be left in place for `poll_c`.
+                    None => {
+                        let state = lua.state();
+                        let result = unsafe {
+                            let top = lua_gettop(state);
+                            let mut results = MultiValue::with_capacity((top.max(1) - 1) as usize);
+                            let mut err = None;
+                            for i in 2..=top {
+                                match lua.value_from_stack(i) {
+                                    Ok(v) => results.push_back(v),
+                                    Err(e) => {
+                                        err = Some(e);
+                                        break;
                                     }
                                 }
-                                None => lua_pushnil(state),
                             }
-                        } else {
-                            // Multiple: pack into a sequence table.
-                            match lua.create_sequence_from(values) {
-                                Ok(t) => t.push_to_stack(),
-                                Err(e) => return Poll::Ready(Err(e)),
+                            // Drop the resume values, keeping the future at index 1.
+                            if top > 1 {
+                                lua_settop(state, 1);
                             }
-                        }
-                        lua_pushinteger(state, count);
+                            match err {
+                                Some(e) => Err(e),
+                                None => R::from_lua_multi(results, &lua),
+                            }
+                        };
+                        Poll::Ready(result)
                     }
-                    Poll::Pending
                 }
-                // Second poll (after resume): collect the resume values.
-                //
-                // We are running inside `poll(future, <resume values>)`, so the
-                // coroutine stack is `[future, resume1, resume2, ...]`. The
-                // resume values are at indices 2..=top; index 1 (the future) is
-                // *not* a result and must be left in place for `poll_c`.
-                None => {
-                    let state = lua.state();
-                    let result = unsafe {
-                        let top = lua_gettop(state);
-                        let mut results = MultiValue::with_capacity((top.max(1) - 1) as usize);
-                        let mut err = None;
-                        for i in 2..=top {
-                            match lua.value_from_stack(i) {
-                                Ok(v) => results.push_back(v),
-                                Err(e) => {
-                                    err = Some(e);
-                                    break;
-                                }
-                            }
-                        }
-                        // Drop the resume values, keeping the future at index 1.
-                        if top > 1 {
-                            lua_settop(state, 1);
-                        }
-                        match err {
-                            Some(e) => Err(e),
-                            None => R::from_lua_multi(results, &lua),
-                        }
-                    };
-                    Poll::Ready(result)
-                }
-            }
             })
             .await
         }
