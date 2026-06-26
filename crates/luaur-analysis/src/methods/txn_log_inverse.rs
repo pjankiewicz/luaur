@@ -13,7 +13,9 @@ impl TxnLog {
             type_pack_changes: DenseHashMap::new(core::ptr::null()),
             parent: core::ptr::null_mut(),
             owned_seen: Vec::new(),
+            // Borrows the original's seen set (C++ `inversed(sharedSeen)`).
             shared_seen: self.shared_seen,
+            owned_seen_box: None,
             radioactive: false,
         };
 

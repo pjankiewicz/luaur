@@ -10,7 +10,10 @@ impl TxnLog {
         rhs: TypeOrPackId,
     ) {
         if self.shared_seen.is_null() {
-            self.shared_seen = Box::into_raw(Box::new(Vec::new()));
+            // Lazily own a fresh seen set (freed on drop) instead of leaking it.
+            let mut seen_box = Box::new(Vec::new());
+            self.shared_seen = seen_box.as_mut() as *mut _;
+            self.owned_seen_box = Some(seen_box);
         }
 
         let sorted_pair = if lhs > rhs { (lhs, rhs) } else { (rhs, lhs) };

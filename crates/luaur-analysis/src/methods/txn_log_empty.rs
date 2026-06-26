@@ -29,6 +29,8 @@ impl TxnLog {
                 parent: core::ptr::null_mut(),
                 owned_seen: Vec::new(),
                 shared_seen: core::ptr::null_mut(),
+                // Uses the inline `owned_seen` directly (see below), not a box.
+                owned_seen_box: None,
                 radioactive: false,
             });
 

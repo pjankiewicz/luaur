@@ -38,8 +38,11 @@ impl TypeChecker {
 
         let normalizer_ptr: *mut Normalizer = &mut self.normalizer;
         let scope_ptr: *mut Scope = Arc::as_ptr(scope) as *mut Scope;
-        let shared_seen: *mut Vec<(TypeOrPackId, TypeOrPackId)> =
-            Box::into_raw(Box::new(Vec::new()));
+        // Own the seen set in a boxed Vec freed when this Unifier's log drops,
+        // instead of leaking it via `Box::into_raw` on every top-level unify (the
+        // leak the fuzz suite's LeakSanitizer flagged here).
+        let mut seen_box: Box<Vec<(TypeOrPackId, TypeOrPackId)>> = Box::new(Vec::new());
+        let shared_seen: *mut Vec<(TypeOrPackId, TypeOrPackId)> = seen_box.as_mut();
 
         Unifier {
             types,
@@ -52,6 +55,7 @@ impl TypeChecker {
                 parent: core::ptr::null_mut(),
                 owned_seen: Vec::new(),
                 shared_seen,
+                owned_seen_box: Some(seen_box),
                 radioactive: false,
             },
             failure: false,

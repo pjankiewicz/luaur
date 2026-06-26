@@ -7,6 +7,8 @@ impl TxnLog {
         &mut self,
         shared_seen: *mut Vec<(TypeOrPackId, TypeOrPackId)>,
     ) {
+        // Adopt a borrowed seen set; release ours if we owned one.
         self.shared_seen = shared_seen;
+        self.owned_seen_box = None;
     }
 }

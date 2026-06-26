@@ -18,7 +18,9 @@ impl Unifier {
                 type_pack_changes: DenseHashMap::new(core::ptr::null()),
                 parent: parent_log,
                 owned_seen: Vec::new(),
+                // Child borrows the parent's seen set; it does not own/free it.
                 shared_seen: self.log.shared_seen,
+                owned_seen_box: None,
                 radioactive: false,
             },
             failure: false,

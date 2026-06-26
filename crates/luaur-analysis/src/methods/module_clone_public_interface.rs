@@ -49,7 +49,9 @@ impl Module {
             type_pack_changes: DenseHashMap::new(core::ptr::null()),
             parent: core::ptr::null_mut(),
             owned_seen: Vec::new(),
+            // Empty; lazily owns a box on first `push_seen` (freed on drop).
             shared_seen: core::ptr::null_mut(),
+            owned_seen_box: None,
             radioactive: false,
         };
         let mut clone_public_interface =
