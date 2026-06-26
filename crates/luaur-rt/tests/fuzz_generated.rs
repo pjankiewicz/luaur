@@ -36,8 +36,11 @@
 //! ```
 //!
 //! Seeds are fixed by default, so a given commit either always passes or always
-//! fails a seed — reproducible, never flaky. Crank `FUZZ_ITERS` for a deeper
-//! local soak.
+//! *fails the same seed* — the inputs are reproducible. The default iteration
+//! counts are kept low so this is a fast bounded smoke that finishes well inside
+//! nextest's 30s cap even on a loaded CI runner (an over-long run once *timed
+//! out* on macOS — a wall-clock flake, not a seed flake). Real fuzzing is AFL
+//! (`fuzz/`, `make fuzz-<target>`); crank `FUZZ_ITERS` here for a deeper local soak.
 
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -502,7 +505,11 @@ fn quiet_panics() {
 #[test]
 fn fuzz_compile_never_panics() {
     quiet_panics();
-    let n = iters(1500);
+    // A fast, bounded smoke — NOT a soak. The real fuzzing is AFL (see fuzz/ +
+    // `make fuzz-compile`); this just guards the common path on every test run, so
+    // keep the default low enough to finish well inside nextest's 30s cap on a
+    // loaded CI runner. Crank `FUZZ_ITERS` locally for depth.
+    let n = iters(500);
     for i in 0..n {
         let seed = base_seed().wrapping_add(i);
         // ~1 in 4 inputs is corrupted to fuzz the error path.
@@ -531,7 +538,10 @@ fn fuzz_compile_never_panics() {
 #[test]
 fn fuzz_run_never_panics() {
     quiet_panics();
-    let n = iters(800);
+    // Compile + run is the slowest path; 800 iters timed out (>30s) on a loaded
+    // macOS CI runner. Keep the default a fast smoke; deep fuzzing is AFL's job
+    // (`make fuzz-run`). Crank `FUZZ_ITERS` locally for depth.
+    let n = iters(200);
     for i in 0..n {
         let seed = base_seed() ^ 0x0000_BEEF_0000_0001 ^ i;
         let src = gen_program(seed);
