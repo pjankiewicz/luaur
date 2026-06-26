@@ -70,3 +70,10 @@ path = "fuzz_targets/typeck_defs.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "determinism"
+path = "fuzz_targets/determinism.rs"
+test = false
+doc = false
+bench = false
