@@ -63,3 +63,10 @@ path = "fuzz_targets/structured.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "typeck_defs"
+path = "fuzz_targets/typeck_defs.rs"
+test = false
+doc = false
+bench = false

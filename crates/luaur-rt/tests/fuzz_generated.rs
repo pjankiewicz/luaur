@@ -39,9 +39,9 @@
 //! fails a seed — reproducible, never flaky. Crank `FUZZ_ITERS` for a deeper
 //! local soak.
 
-use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use luaur_rt::{Lua, Result, VmState};
 
@@ -540,12 +540,13 @@ fn fuzz_run_never_panics() {
             let lua = Lua::new();
             // Bound execution: abort after a budget of interrupt safepoints so a
             // generated infinite loop can't hang the test.
-            let steps = Rc::new(Cell::new(0u64));
+            // `Arc<AtomicU64>` (not `Rc<Cell>`) so the interrupt closure is `Send`
+            // — `set_interrupt` requires `MaybeSend`, which is `Send` under the
+            // `send` feature (the feature-combo CI build compiles this test).
+            let steps = Arc::new(AtomicU64::new(0));
             let counter = steps.clone();
             lua.set_interrupt(move |_| -> Result<VmState> {
-                let c = counter.get() + 1;
-                counter.set(c);
-                if c > 500_000 {
+                if counter.fetch_add(1, Ordering::Relaxed) + 1 > 500_000 {
                     Err(luaur_rt::Error::runtime("fuzz: step limit reached"))
                 } else {
                     Ok(VmState::Continue)

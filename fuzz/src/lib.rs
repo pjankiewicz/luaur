@@ -340,3 +340,94 @@ impl<'a> Gen<'a> {
 pub fn generate(data: &[u8]) -> String {
     Gen::new(data).program()
 }
+
+impl<'a> Gen<'a> {
+    /// Generate a Luau **definition file** (`declare ...` blocks) — the host-type
+    /// surface fed to `check_with_definitions`.
+    pub fn definitions(mut self) -> String {
+        let n = self.below(8) + 1;
+        for _ in 0..n {
+            self.decl();
+            self.push("\n");
+        }
+        self.out
+    }
+
+    fn decl(&mut self) {
+        match self.below(3) {
+            0 => {
+                self.push("declare function ");
+                self.name();
+                self.push("(");
+                let p = self.below(3);
+                for i in 0..p {
+                    if i > 0 {
+                        self.push(", ");
+                    }
+                    self.name();
+                    self.push(": ");
+                    self.ty();
+                }
+                self.push("): ");
+                self.ty();
+            }
+            1 => {
+                self.push("declare ");
+                self.name();
+                self.push(": ");
+                self.ty();
+            }
+            _ => {
+                self.push("declare class ");
+                self.name();
+                self.push("\n");
+                let m = self.below(4);
+                for _ in 0..m {
+                    self.name();
+                    self.push(": ");
+                    self.ty();
+                    self.push("\n");
+                }
+                self.push("end");
+            }
+        }
+    }
+
+    fn ty(&mut self) {
+        self.budget -= 1;
+        if self.dry() {
+            return self.push("any");
+        }
+        match self.below(7) {
+            0 => self.push("number"),
+            1 => self.push("string"),
+            2 => self.push("boolean"),
+            3 => self.push("any"),
+            4 => {
+                self.push("{ ");
+                self.name();
+                self.push(": ");
+                self.ty();
+                self.push(" }");
+            }
+            5 => {
+                self.push("{");
+                self.ty();
+                self.push("}");
+            }
+            _ => {
+                self.push("(");
+                if self.below(2) == 0 {
+                    self.ty();
+                }
+                self.push(") -> ");
+                self.ty();
+            }
+        }
+    }
+}
+
+/// Generate a Luau definition file (`declare ...`) from raw fuzzer bytes.
+pub fn generate_definitions(data: &[u8]) -> String {
+    Gen::new(data).definitions()
+}
