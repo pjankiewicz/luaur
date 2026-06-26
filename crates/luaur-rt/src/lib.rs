@@ -149,7 +149,7 @@ pub use traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti};
 /// [`Error::TypeError`](crate::Error::TypeError).
 #[cfg(feature = "typecheck")]
 #[cfg_attr(docsrs, doc(cfg(feature = "typecheck")))]
-pub use typecheck::{check, check_with_definitions, TypeDiagnostic};
+pub use typecheck::{check, check_with_definitions, Checker, TypeDiagnostic};
 
 pub use app_data::{AppDataRef, AppDataRefMut};
 /// The [`AsyncThread`] driver — a coroutine being run to completion as a Rust

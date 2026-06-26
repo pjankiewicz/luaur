@@ -418,3 +418,103 @@ fn panic_message(payload: &(dyn core::any::Any + Send)) -> String {
         "unknown error".to_string()
     }
 }
+
+/// A reusable type checker: registers the Luau builtins **once** and checks many
+/// sources against the shared global environment.
+///
+/// A one-shot [`check`] rebuilds the whole frontend and re-parses + re-checks the
+/// entire `@luau` builtin definition file on every call — that setup dominates the
+/// cost. `Checker` pays it once at construction, so each [`Checker::check`] only
+/// parses and checks the input itself (orders of magnitude faster across many
+/// snippets — fuzzers, language servers, batch linters).
+///
+/// Host definitions are not supported here: they mutate the global environment and
+/// so can't be cached this way — use [`check_with_definitions`] for those.
+pub struct Checker {
+    // Boxed so their addresses are stable for the checker's whole lifetime:
+    // `Frontend` stores raw `*mut` pointers into the resolvers (the `repr(C)`
+    // vtable thunks cast back via the address) and `wire_self_pointers` makes the
+    // frontend self-referential. Moving the `Checker` moves only the `Box`
+    // pointers; the pointees stay put on the heap, so every stored pointer stays
+    // valid. `config_resolver` is kept alive solely because the frontend points
+    // into it.
+    file_resolver: Box<CheckFileResolver>,
+    #[allow(dead_code)]
+    config_resolver: Box<CheckConfigResolver>,
+    frontend: Box<Frontend>,
+}
+
+impl Checker {
+    /// Build a checker with the Luau builtins registered (the expensive,
+    /// once-only step).
+    pub fn new() -> Self {
+        let mut file_resolver = Box::new(CheckFileResolver::new(""));
+        let mut config_resolver = Box::new(CheckConfigResolver::new());
+        let options = FrontendOptions::default();
+        let mut frontend = Box::new(
+            Frontend::frontend_file_resolver_config_resolver_frontend_options(
+                &mut file_resolver.base,
+                &mut config_resolver.base,
+                &options,
+            ),
+        );
+        // Wire AFTER boxing so the self-pointers target the stable heap address.
+        unsafe {
+            frontend.wire_self_pointers();
+        }
+        frontend.set_luau_solver_mode(SolverMode::Old);
+
+        let frontend_ptr: *mut Frontend = &mut *frontend;
+        // SAFETY: `frontend_ptr` is the live boxed frontend. Register the Luau
+        // builtins into the global scope once (the cost we're amortizing).
+        unsafe {
+            unfreeze((*frontend_ptr).globals.global_types_mut());
+            register_builtin_globals(&mut *frontend_ptr, &mut (*frontend_ptr).globals, false);
+            freeze((*frontend_ptr).globals.global_types_mut());
+        }
+
+        Checker {
+            file_resolver,
+            config_resolver,
+            frontend,
+        }
+    }
+
+    /// Type-check `source` against the cached global environment. `Ok(())` when it
+    /// checks clean, otherwise the diagnostics. Never panics on malformed input
+    /// (the checker returns errors).
+    pub fn check(&mut self, source: &str) -> core::result::Result<(), Vec<TypeDiagnostic>> {
+        // Point the single "main" module at the new source and force a re-check.
+        self.file_resolver.source = source.to_string();
+        self.frontend.mark_dirty(&MAIN_MODULE.to_string(), None);
+
+        let check_result = self
+            .frontend
+            .check_module_name_optional_frontend_options(&MAIN_MODULE.to_string(), None);
+
+        let mut diagnostics = Vec::new();
+        for err in &check_result.errors {
+            let begin = err.location.begin;
+            let end = err.location.end;
+            diagnostics.push(TypeDiagnostic {
+                line: begin.line + 1,
+                column: begin.column + 1,
+                end_line: end.line + 1,
+                end_column: end.column + 1,
+                message: to_string_type_error(err),
+                in_definitions: false,
+            });
+        }
+        if diagnostics.is_empty() {
+            Ok(())
+        } else {
+            Err(diagnostics)
+        }
+    }
+}
+
+impl Default for Checker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
