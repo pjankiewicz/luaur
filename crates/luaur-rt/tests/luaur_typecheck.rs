@@ -190,3 +190,49 @@ fn check_then_run_static_check_is_advisory() {
         .expect("dynamically-typed Luau should still run the ill-typed chunk");
     assert_eq!(value, 42, "the chunk should evaluate to 42 at runtime");
 }
+
+// ---------------------------------------------------------------------------
+// Determinism: `check` must be a pure function of its input.
+// ---------------------------------------------------------------------------
+
+/// Regression test for nondeterministic type inference.
+///
+/// `filterMap` (and the refinement-map `merge` / `refineLValue` paths) used to
+/// dedupe a refined union's options through a `std::collections::HashSet<TypeId>`,
+/// whose iteration order is a per-instance random seed over raw `*const Type`
+/// pointers. That made the resulting union's *option order* — and therefore the
+/// "first incompatible option" reported by union-vs-type unification — vary from
+/// one `check()` call to the next, even within a single process. The C++ original
+/// uses `std::set<TypeId>` (pointer-ordered: at least stable within a run); the
+/// faithful fix dedupes in insertion order, which is deterministic regardless of
+/// addresses.
+///
+/// This program builds a multi-option union via the `or` truthy-filter
+/// (`v or 0`, with `v: string | number | boolean`) and then forces a
+/// union-vs-`number` unification (`... + 1`), which reports the first failing
+/// option. Before the fix this yielded two distinct diagnostic strings across
+/// runs; it must now be identical every time.
+#[test]
+fn check_is_deterministic_for_refined_unions() {
+    let src = "local function f(v: string | number | boolean)\n  return (v or 0) + 1\nend\n";
+
+    let baseline = format!("{:?}", check(src));
+    // It must actually exercise the diagnostic path we care about.
+    assert!(
+        check(src).is_err(),
+        "the union-vs-number mismatch should produce a diagnostic"
+    );
+
+    // The old HashSet-order bug flipped the reported option on ~1 in 2 calls, so
+    // even a few dozen repetitions catch a regression with overwhelming
+    // probability — P(64 buggy draws all matching the baseline by luck) is ~2^-63.
+    // Kept modest on purpose: each `check()` rebuilds a Frontend and registers all
+    // builtins, so a few hundred calls would trip CI's anti-OOM slow-timeout.
+    for i in 0..64 {
+        let again = format!("{:?}", check(src));
+        assert_eq!(
+            baseline, again,
+            "check() must be deterministic, but result diverged on iteration {i}"
+        );
+    }
+}

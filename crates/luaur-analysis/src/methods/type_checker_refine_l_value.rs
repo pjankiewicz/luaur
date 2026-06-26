@@ -13,7 +13,6 @@ use crate::type_aliases::type_id::TypeId;
 use crate::type_aliases::type_id_predicate::TypeIdPredicate;
 use luaur_ast::records::location::Location;
 use luaur_common::macros::luau_assert::LUAU_ASSERT;
-use std::collections::HashSet;
 
 impl TypeChecker {
     pub fn refine_l_value(
@@ -65,9 +64,13 @@ impl TypeChecker {
         let utv = unsafe { get_type_id::<UnionType>(follow_type_id(ty.unwrap())) };
         LUAU_ASSERT!(!utv.is_null());
 
-        let mut viable_target_options: HashSet<TypeId> = HashSet::new();
+        // Insertion-order dedup (not HashSet<TypeId>): the iteration order of a
+        // pointer-keyed HashSet is per-instance randomized, which would make the
+        // refined union's option order — and diagnostics derived from it —
+        // nondeterministic. Preserving the source union's order keeps it stable.
+        let mut viable_target_options: alloc::vec::Vec<TypeId> = alloc::vec::Vec::new();
         // There may be additional refinements that apply. We add those here too.
-        let mut viable_child_options: HashSet<TypeId> = HashSet::new();
+        let mut viable_child_options: alloc::vec::Vec<TypeId> = alloc::vec::Vec::new();
 
         let key_ref = key.as_ref().unwrap();
         for &option in unsafe { (*utv).options.iter() } {
@@ -93,18 +96,22 @@ impl TypeChecker {
             let (result, _ok) = self.filter_map(discriminant_ty, make_predicate(&predicate));
             let result = result.unwrap();
             if unsafe { get_type_id::<NeverType>(result).is_null() } {
-                viable_target_options.insert(option);
-                viable_child_options.insert(result);
+                if !viable_target_options.contains(&option) {
+                    viable_target_options.push(option);
+                }
+                if !viable_child_options.contains(&result) {
+                    viable_child_options.push(result);
+                }
             }
         }
 
-        let into_type = |this: &mut TypeChecker, s: &HashSet<TypeId>| -> Option<TypeId> {
+        let into_type = |this: &mut TypeChecker, s: &[TypeId]| -> Option<TypeId> {
             if s.is_empty() {
                 return None;
             }
 
             // TODO: allocate UnionType and just normalize.
-            let options: alloc::vec::Vec<TypeId> = s.iter().copied().collect();
+            let options: alloc::vec::Vec<TypeId> = s.to_vec();
             if options.len() == 1 {
                 return Some(options[0]);
             }
