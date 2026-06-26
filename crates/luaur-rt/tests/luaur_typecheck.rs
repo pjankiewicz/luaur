@@ -236,3 +236,35 @@ fn check_is_deterministic_for_refined_unions() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// `check` must not abort on self-referential / forward-referenced aliases.
+// ---------------------------------------------------------------------------
+
+/// Regression test for a `getMutable` "must follow first" assertion abort.
+///
+/// `TypeChecker::check(AstStatTypeAlias)` called `getMutable::<TableType>(ty)` /
+/// `getMutable::<MetatableType>(ty)` on the raw `resolve_type` result without
+/// `follow`-ing it. For a forward-referenced alias chain (here `T = Pt`, `Pt`
+/// referring back to `T`, plus a third alias `Pair = T`), that result is a
+/// `BoundType` — and `getMutable` asserts its argument is not bound. With Luau
+/// assertions armed (debug builds / the fuzz profile) this aborted with SIGTRAP;
+/// in release the assert is compiled out, silently returning null. The sibling
+/// `check(AstStatLocal)` already followed; the fix makes the alias path match.
+///
+/// Found by the `typeck_typed` fuzz target. Under `cfg(test)` (debug-assertions
+/// on) a regression would abort the process — so simply running this to
+/// completion is the assertion.
+#[test]
+fn check_does_not_abort_on_self_referential_alias() {
+    // Forward-referenced + mutually recursive aliases whose resolution yields a
+    // BoundType at the `getMutable` site.
+    let src = "type T = Pt\ntype Pt = string | { f: T } & boolean\ntype Pair = T\n";
+    // We don't care whether it's Ok or Err (it's a recursive-type error) — only
+    // that the checker returns instead of aborting on the bound type.
+    let _ = check(src);
+
+    // A couple of related shapes that also reach the alias `getMutable` path.
+    let _ = check("type A = A\n");
+    let _ = check("type X = Y\ntype Y = { next: X }?\ntype Z = X\n");
+}

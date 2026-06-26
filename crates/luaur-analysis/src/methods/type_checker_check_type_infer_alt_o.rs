@@ -74,7 +74,14 @@ impl TypeChecker {
         let mut ty = self.resolve_type(alias_scope.clone(), unsafe { &*typealias.type_ptr });
 
         unsafe {
-            let table = get_mutable_type_id::<TableType>(ty);
+            // `getMutable` requires a followed type (it asserts the arg is not a
+            // BoundType). `ty` here is the raw result of `resolve_type`, which for
+            // a self-referential / chained alias (e.g. `type A = A`, or `type T =
+            // Pt; type Pt = ... T ...`) is a Bound — so follow before inspecting it,
+            // matching the sibling `check_scope_ptr_ast_stat_local`. (C++ Luau's
+            // assert is compiled out in release, masking this; our fuzz build arms
+            // it, where it aborted.)
+            let table = get_mutable_type_id::<TableType>(follow_type_id(ty));
             if !table.is_null() {
                 let type_params: alloc::vec::Vec<_> =
                     binding.type_params().iter().map(|param| param.ty).collect();
@@ -101,7 +108,7 @@ impl TypeChecker {
                     (*table).instantiated_type_pack_params = type_pack_params;
                 }
             } else {
-                let metatable = get_mutable_type_id::<MetatableType>(ty);
+                let metatable = get_mutable_type_id::<MetatableType>(follow_type_id(ty));
                 if !metatable.is_null() {
                     (*metatable).syntheticName = Some(name.clone());
                 }
