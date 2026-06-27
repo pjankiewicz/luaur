@@ -22,6 +22,7 @@ use crate::records::table_type::TableType;
 use crate::records::type_arena::TypeArena;
 use crate::records::type_pack_var::TypePackVar;
 use crate::type_aliases::bound_type::BoundType;
+use crate::type_aliases::bound_type_pack::BoundTypePack;
 use crate::type_aliases::type_id::TypeId;
 use crate::type_aliases::type_pack_id::TypePackId;
 use core::ffi::c_void;
@@ -115,6 +116,14 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
     /// `bool visit(TypePackId tp, const FreeTypePack&) override` (Unifier.cpp:111-120).
     fn visit_type_pack_id_free_type_pack(&mut self, tp: TypePackId, _ftp: &FreeTypePack) -> bool {
         unsafe {
+            // Mirror the TypeId path (`visit_type_id_free_type`): the pack may
+            // actually be a BoundTypePack that the txn log hasn't committed yet.
+            // `getMutable`/`is::<FreeTypePack>` both go *through* getMutable and
+            // assert on a bound pack; `is::<BoundTypePack>` is the one query
+            // getMutable permits, so use it to detect and skip the now-bound case.
+            if (*self.log).txn_log_is::<BoundTypePack, TypePackId>(tp) {
+                return true;
+            }
             if !(*self.log).txn_log_is::<FreeTypePack, TypePackId>(tp) {
                 return true;
             }

@@ -268,3 +268,36 @@ fn check_does_not_abort_on_self_referential_alias() {
     let _ = check("type A = A\n");
     let _ = check("type X = Y\ntype Y = { next: X }?\ntype Z = X\n");
 }
+
+/// Sibling of the above for the **TypePackId** path. `PromoteTypeLevels`'s
+/// `visit_type_pack_id_free_type_pack` would call the asserting `getMutable`
+/// (via `is::<FreeTypePack>`) on a pack the txn log has bound but not yet
+/// committed, tripping `BoundTypePack::get_if(...).is_none()` at
+/// `get_mutable_type_pack.rs:16` (SIGTRAP with assertions armed). The fix mirrors
+/// the TypeId path: short-circuit on `is::<BoundTypePack>` first.
+///
+/// Found by the `typeck_typed` fuzz target; this source is the decoded reproducer
+/// (recursive aliases unified through a function type yield the bound free pack).
+/// C++ luau-analyze runs it cleanly (only ordinary type errors) — port-specific.
+/// Running to completion under `cfg(test)` (assertions on) IS the assertion.
+#[test]
+fn check_does_not_abort_on_bound_free_type_pack_promotion() {
+    let src = "type T = V | T\n\
+               type U = {{{boolean}}}\n\
+               type V = V | number\n\
+               local h: boolean\n\
+               c = -129\n\
+               local h = 550\n\
+               local h: T\n\
+               type Pair = V\n\
+               local x: {string & unknown & unknown & number & unknown & V & number & unknown} & T & T & T & {T} & T & T & T & T = ({x = h:h(h:h(h:e(true), 366.49), -function(c) do\n\
+               e = e\n\
+               e = e\n\
+               end\n\
+               do\n\
+               e = e\n\
+               end\n\
+                end), e = 0 + 0})\n\
+               type T<T> = number\n";
+    let _ = check(src);
+}
