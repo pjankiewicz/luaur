@@ -4,7 +4,7 @@
 // parser + bytecode compiler.
 
 #[cfg(feature = "afl-runtime")]
-use afl::fuzz;
+use afl::fuzz_nohook;
 
 #[cfg(not(feature = "afl-runtime"))]
 include!("standalone.rs");
@@ -18,9 +18,12 @@ fn exercise_input(data: &[u8]) {
 
 fn main() {
     #[cfg(feature = "afl-runtime")]
-    fuzz!(|data: &[u8]| {
-        exercise_input(data);
-    });
+    {
+        luaur_fuzz::install_afl_panic_hook();
+        fuzz_nohook!(|data: &[u8]| {
+            exercise_input(data);
+        });
+    }
     #[cfg(not(feature = "afl-runtime"))]
     standalone_main(exercise_input);
 }

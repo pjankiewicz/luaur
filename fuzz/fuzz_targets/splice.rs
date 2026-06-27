@@ -1,9 +1,13 @@
-// Port of Luau's `kFuzzVM` path: compile arbitrary source and, if it compiles,
-// run it on the VM. Execution is bounded by an interrupt step-limit so a
-// generated infinite loop can't hang the fuzzer. The VM must never panic/crash
-// — only return `Ok`/`Err`.
+// AST-splicing target: start from a REAL Luau program (the embedded conformance
+// suite) and apply a fuzzer-byte-driven sequence of statement-level mutations to
+// it (see `luaur_fuzz::generate_spliced`). The leading bytes pick the seed; the
+// tail bytes are the mutation program, so AFL mutating the tail explores nearby
+// mutations of the same real script — reaching language-feature combinations a
+// from-scratch grammar never produces. Type-check, compile, and (if it compiles)
+// run the result under a step limit; must never crash.
 
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 #[cfg(feature = "afl-runtime")]
@@ -14,10 +18,18 @@ include!("standalone.rs");
 
 use luaur_rt::{Lua, Result, VmState};
 
+thread_local! {
+    // Builtins registered once (the expensive step); see the `typeck` target.
+    static CHECKER: RefCell<luaur_rt::Checker> = RefCell::new(luaur_rt::Checker::new());
+}
+
 fn exercise_input(data: &[u8]) {
-    let Ok(src) = std::str::from_utf8(data) else {
-        return;
-    };
+    let src = luaur_fuzz::generate_spliced(data);
+
+    CHECKER.with(|c| {
+        let _ = c.borrow_mut().check(&src);
+    });
+
     let lua = Lua::new();
     let steps = Rc::new(Cell::new(0u64));
     let counter = steps.clone();
@@ -31,7 +43,8 @@ fn exercise_input(data: &[u8]) {
             Ok(VmState::Continue)
         }
     });
-    if let Ok(f) = lua.load(src).set_name("fuzz").into_function() {
+
+    if let Ok(f) = lua.load(&src).set_name("fuzz").into_function() {
         let _ = f.call::<()>(());
     }
 }

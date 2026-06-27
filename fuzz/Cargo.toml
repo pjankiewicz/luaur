@@ -25,6 +25,9 @@ arbitrary = { version = "1", features = ["derive"] }
 afl = { version = "0.18", optional = true }
 luaur-rt = { path = "../crates/luaur-rt", features = ["typecheck"] }
 luaur-ast = { path = "../crates/luaur-ast" }
+# For `install_afl_panic_hook`: detect the compiler's intentional `CompileError`
+# throw (panic_any, caught by compile()) so AFL doesn't treat it as a crash.
+luaur-compiler = { path = "../crates/luaur-compiler" }
 
 [features]
 # `afl-runtime` (default) links the AFL fork-server runtime via `cargo afl build`
@@ -89,8 +92,58 @@ doc = false
 bench = false
 
 [[bin]]
+name = "typeck_typed"
+path = "fuzz_targets/typeck_typed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "determinism"
 path = "fuzz_targets/determinism.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip"
+path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "splice"
+path = "fuzz_targets/splice.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "optdiff"
+path = "fuzz_targets/optdiff.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metamorphic"
+path = "fuzz_targets/metamorphic.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spans"
+path = "fuzz_targets/spans.rs"
+test = false
+doc = false
+bench = false
+
+# Plain tool (no AFL harness): distills a seed corpus from the generators.
+[[bin]]
+name = "gen_corpus"
+path = "fuzz_targets/gen_corpus.rs"
 test = false
 doc = false
 bench = false
