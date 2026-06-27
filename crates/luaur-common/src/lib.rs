@@ -23,6 +23,12 @@ mod vec_deque_tests;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_libc;
 
+/// Pure-Rust `strtod` shim for wasm (no libc on `wasm32-unknown-unknown`). The
+/// scanning core is unit-tested natively, so the module is also compiled under
+/// `test`; only the `#[no_mangle]` C entry point is wasm-gated.
+#[cfg(any(target_arch = "wasm32", test))]
+pub mod strtod_shim;
+
 // C++ exposes this at namespace scope; codegen_assert! and friends reference
 // `luaur_common::assert_call_handler` directly.
 pub use functions::assert_call_handler::assert_call_handler;
