@@ -27,6 +27,7 @@ use core::ffi::{c_char, c_int, c_void};
 const HEADER: usize = 16;
 
 /// `malloc(size)` — allocate `size` bytes (size-prefixed).
+#[cfg(target_os = "unknown")] // wasi-libc provides malloc/free/realloc
 #[no_mangle]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
     if size == 0 {
@@ -49,6 +50,7 @@ pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
 }
 
 /// `free(ptr)` — release a block previously returned by [`malloc`]/[`realloc`].
+#[cfg(target_os = "unknown")]
 #[no_mangle]
 pub unsafe extern "C" fn free(ptr: *mut c_void) {
     if ptr.is_null() {
@@ -61,6 +63,7 @@ pub unsafe extern "C" fn free(ptr: *mut c_void) {
 }
 
 /// `realloc(ptr, size)` — resize a block, preserving its contents.
+#[cfg(target_os = "unknown")]
 #[no_mangle]
 pub unsafe extern "C" fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void {
     if ptr.is_null() {

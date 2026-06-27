@@ -85,14 +85,51 @@ unsafe fn capturing_print(l: *mut lua_State) -> c_int {
     0
 }
 
+/// Structured result of a [`run`] call: the program's captured `print` output
+/// and, *separately*, any error text (an empty string when the run succeeded).
+///
+/// Keeping the two apart — rather than concatenating them into one string the
+/// caller then has to guess apart — is what lets the playground classify a run
+/// correctly. With a single combined string the only signal available to
+/// JavaScript was a content heuristic, which both *false-positived* (legitimate
+/// output containing the word "error" — e.g. iterating `_G`, which has a global
+/// literally named `error` — was painted as a failure) and *false-negatived* (a
+/// compile error whose text lacked the magic words was reported as success).
+/// `error` non-empty ⇔ the run failed; no scanning of `output` required.
+#[wasm_bindgen]
+pub struct RunResult {
+    output: String,
+    error: String,
+}
+
+#[wasm_bindgen]
+impl RunResult {
+    /// The script's captured `print` output (tab-separated arguments, one line
+    /// per `print`, each terminated by a newline).
+    #[wasm_bindgen(getter)]
+    pub fn output(&self) -> String {
+        self.output.clone()
+    }
+
+    /// Error text, or the empty string when the run succeeded. In the browser
+    /// build this is a compile/load error message: a genuine *runtime* error
+    /// traps the WebAssembly instance (`panic = "abort"` on
+    /// `wasm32-unknown-unknown`) and is surfaced by the caller's trap handler,
+    /// so it never reaches here.
+    #[wasm_bindgen(getter)]
+    pub fn error(&self) -> String {
+        self.error.clone()
+    }
+}
+
 /// Compile and execute `source` on a fresh sandboxed Luau VM, returning the
-/// program's captured `print` output followed by any runtime error text.
+/// program's captured `print` output and any error text as separate fields of a
+/// [`RunResult`].
 ///
 /// This is the browser counterpart of the crate's `extern "C"` `execute_script`
-/// — it shares `setup_state` and `run_code`, but installs a capturing `print`
-/// and returns the captured output as an owned `String`.
+/// — it shares `setup_state` and `run_code`, but installs a capturing `print`.
 #[wasm_bindgen]
-pub fn run(source: &str) -> String {
+pub fn run(source: &str) -> RunResult {
     // Enable the `Luau*` bool fast flags, matching `execute_script`.
     set_luau_bool_flags(true);
 
@@ -117,14 +154,8 @@ pub fn run(source: &str) -> String {
 
         lua_close(l);
 
-        let mut out = PRINT_BUFFER.with(|b| core::mem::take(&mut *b.borrow_mut()));
-        if !error.is_empty() {
-            if !out.is_empty() && !out.ends_with('\n') {
-                out.push('\n');
-            }
-            out.push_str(&error);
-        }
-        out
+        let output = PRINT_BUFFER.with(|b| core::mem::take(&mut *b.borrow_mut()));
+        RunResult { output, error }
     }
 }
 

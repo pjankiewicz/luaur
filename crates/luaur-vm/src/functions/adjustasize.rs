@@ -19,8 +19,12 @@ pub unsafe fn adjustasize(
         -1
     };
 
-    // move the array size up until the boundary is guaranteed to be inside the array part
-    while size + 1 == ekindex || (tbound && !ttisnil!(lua_h_getnum(t, size + 1))) {
+    // move the array size up until the boundary is guaranteed to be inside the array part.
+    // Stop at INT_MAX: the array can't be larger, and `size + 1` there overflows `int`
+    // (UB in C++ Luau / a panic with overflow-checks on — found by the run fuzz target).
+    while size != core::ffi::c_int::MAX
+        && (size + 1 == ekindex || (tbound && !ttisnil!(lua_h_getnum(t, size + 1))))
+    {
         size += 1;
     }
 

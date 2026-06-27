@@ -21,6 +21,7 @@ use crate::records::promote_type_levels::PromoteTypeLevels;
 use crate::records::table_type::TableType;
 use crate::records::type_arena::TypeArena;
 use crate::records::type_pack_var::TypePackVar;
+use crate::type_aliases::bound_type::BoundType;
 use crate::type_aliases::type_id::TypeId;
 use crate::type_aliases::type_pack_id::TypePackId;
 use core::ffi::c_void;
@@ -59,7 +60,13 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
     fn visit_type_id_free_type(&mut self, ty: TypeId, _ftv: &FreeType) -> bool {
         unsafe {
             // Surprise, it's actually a BoundType that hasn't been committed
-            // yet. Calling getMutable on this will trigger an assertion.
+            // yet. Calling getMutable on this will trigger an assertion — and so
+            // would `is::<FreeType>` below, because it goes *through* getMutable.
+            // `is::<BoundType>` is the one query getMutable permits without
+            // asserting, so use it to detect (and skip) the now-bound case.
+            if (*self.log).txn_log_is::<BoundType, TypeId>(ty) {
+                return true;
+            }
             if !(*self.log).txn_log_is::<FreeType, TypeId>(ty) {
                 return true;
             }

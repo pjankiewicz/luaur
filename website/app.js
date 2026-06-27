@@ -605,15 +605,28 @@ async function doRun() {
     setRunning(false);
     return;
   }
-  const looksError = /\b(error|Error)\b|stack backtrace|attempt to/.test(result);
-  if (result.trim() === "") {
+  // run() returns the captured print output and any error as *separate* fields,
+  // so the success/failure verdict comes from `error` being non-empty — never
+  // from scanning the output text. (The old content heuristic painted any run
+  // whose output merely contained the word "error" — e.g. iterating `_G`, whose
+  // globals include one literally named `error` — as a failure, and missed
+  // compile errors whose text lacked the magic words.) A genuine runtime error
+  // traps the instance and is handled in the catch above, so a non-empty `error`
+  // here is a compile/load error.
+  const output = result.output;
+  const error = result.error;
+  result.free();
+  if (error) {
+    let text = output;
+    if (text && !text.endsWith("\n")) text += "\n";
+    text += error;
+    writeOutput(text, "out-err");
+    setStatus("error", "error");
+  } else if (output.trim() === "") {
     writeOutput("(no output — the script produced no print results)", "out-meta");
     setStatus("ran ok", "ready");
-  } else if (looksError) {
-    writeOutput(result, "out-err");
-    setStatus("runtime error", "error");
   } else {
-    writeOutput(result, "out-ok");
+    writeOutput(output, "out-ok");
     setStatus("ran ok", "ready");
   }
   // Keep the run output on screen; don't let a pending auto-check overwrite it.
