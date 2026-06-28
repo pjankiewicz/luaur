@@ -13,7 +13,8 @@ pub fn b_arshift(l: *mut lua_State) -> core::ffi::c_int {
 
     // C: `if (i < 0 || !(r & ((b_uint)1 << (NBITS - 1))))` — logical NOT: sign bit clear.
     if i < 0 || (r & ((1 as b_uint) << (NBITS as u32 - 1))) == 0 {
-        return b_shift(l, r, -i);
+        // wrapping_neg avoids UB on INT_MIN (C++ negates a plain `int`).
+        return b_shift(l, r, i.wrapping_neg());
     }
 
     // arithmetic shift for 'negative' number

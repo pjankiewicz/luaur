@@ -19,7 +19,9 @@ pub unsafe fn int64_extract(l: *mut LuaState) -> core::ffi::c_int {
         "field cannot be negative"
     );
     luaL_argcheck!(l, 0 < w as i64, 3, "width must be positive");
-    if f as i64 + w as i64 > 64 {
+    // `f` is bounded to [0,63] above; compare `w > 64 - f` so a near-i64::MAX
+    // width can't overflow the `f + w` addition.
+    if w as i64 > 64 - f as i64 {
         luaL_error!(l, "trying to access non-existent bits");
     }
 

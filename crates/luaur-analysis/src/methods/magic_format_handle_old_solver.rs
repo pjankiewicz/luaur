@@ -87,6 +87,12 @@ pub fn magic_format_handle_old_solver(
         if i + param_offset >= params.len() {
             break;
         }
+        // No argument expressions ⇒ nothing to attach a location to, and
+        // `args.size - 1` would underflow (the self-call path lacks the
+        // `args.size > 0` guard the non-self path has).
+        if expr.args.size == 0 {
+            break;
+        }
 
         let arg_index = std::cmp::min(i + data_offset, expr.args.size as usize - 1);
         let location = unsafe { &(*(*expr.args.data.add(arg_index as usize))).base.location };

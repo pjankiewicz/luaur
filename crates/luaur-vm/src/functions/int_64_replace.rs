@@ -15,7 +15,9 @@ pub unsafe fn int64_replace(l: *mut LuaState) -> core::ffi::c_int {
 
     luaL_argcheck!(l, 0 <= f && f <= 63, 3, "field cannot be negative");
     luaL_argcheck!(l, 0 < w, 4, "width must be positive");
-    if f + w > 64 {
+    // `f` is bounded to [0,63] above; compare `w > 64 - f` so a near-i64::MAX
+    // width can't overflow the `f + w` addition.
+    if w > 64 - f {
         luaL_error!(l, "trying to access non-existent bits");
     }
 

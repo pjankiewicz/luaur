@@ -121,6 +121,11 @@ pub fn magic_format_type_check(context: &MagicFunctionTypeCheckContext) -> bool 
         if i + param_offset >= params.len() {
             break;
         }
+        // No argument expressions ⇒ nothing to attach a location to, and
+        // `args.size - 1` would underflow.
+        if call_site.args.size == 0 {
+            break;
+        }
         let actual_ty: TypeId = params[i + param_offset];
         let expected_ty: TypeId = expected[i];
         let arg_index = core::cmp::min(

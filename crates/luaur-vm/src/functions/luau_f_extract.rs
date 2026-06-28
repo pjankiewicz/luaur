@@ -35,7 +35,7 @@ pub unsafe fn luauF_extract(
             let a3 = nvalue!(args.offset(1));
             let w = a3 as i32;
 
-            if f >= 0 && w > 0 && f + w <= 32 {
+            if f >= 0 && w > 0 && f as i64 + w as i64 <= 32 {
                 let m: u32 = !(0xFFFF_FFFE_u32 << (w - 1));
                 let r: u32 = (n >> (f as u32)) & m;
 

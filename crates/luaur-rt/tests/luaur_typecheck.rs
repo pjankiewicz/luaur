@@ -301,3 +301,32 @@ fn check_does_not_abort_on_bound_free_type_pack_promotion() {
                type T<T> = number\n";
     let _ = check(src);
 }
+
+/// The remaining `PromoteTypeLevels` TypeId arms — `visit_type_id_table_type` and
+/// `visit_type_id_function_type` — had the same gap as `visit_type_id_free_type`
+/// (fixed earlier): `is::<TableType>` / `is::<FunctionType>` go through the
+/// asserting `getMutable`, tripping `BoundType::get_if(...).is_none()` at
+/// `get_mutable_type.rs:16` (SIGTRAP) on a type the txn log bound but didn't
+/// commit. Fix: short-circuit on `is::<BoundType>` first, like the FreeType arm.
+///
+/// Found by the `spans` fuzz target; this is the decoded reproducer (an
+/// intersection-typed function parameter promoted through a table/function type).
+/// C++ luau-analyze runs it cleanly (only ordinary type errors) — port-specific.
+#[test]
+fn check_does_not_abort_on_bound_table_or_function_promotion() {
+    let src = "type T = any\n\
+               type U = never\n\
+               type V = boolean?\n\
+               local function b(z: BoxT, z: T & T): V\n\
+               if z:z(z:g(z:c(), ((rawequal(true)))), z) then\n\
+               local c = {f = {}, d = h, [true] = z:z(z:z(#{d = false, false} .. true, z:z(y(z:z(z:z((((((((c[#z:z(nil, nil)]))))))), select()), ((z:h(true, true)))), nil), ((((((((((((((x.x)))))))))))))))), ((((0)))))}\n\
+               return 0\n\
+               else\n\
+               return 0\n\
+               end\n\
+               local a = 0\n\
+               return 0\n\
+               end\n\
+               type T<T> = number\n";
+    let _ = check(src);
+}

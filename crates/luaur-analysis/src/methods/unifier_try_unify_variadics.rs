@@ -31,11 +31,13 @@ impl Unifier {
         let super_variadic = self
             .log
             .txn_log_get_mutable::<VariadicTypePack, TypePackId>(super_tp);
-        let variadic_ty = unsafe { follow_type((*super_variadic).ty) };
 
+        // Null/ICE check BEFORE the deref (C++ checks first; the port had the
+        // `follow_type((*super_variadic).ty)` read ahead of this guard).
         if super_variadic.is_null() {
             self.ice_string("passed non-variadic pack to tryUnifyVariadics");
         }
+        let variadic_ty = unsafe { follow_type((*super_variadic).ty) };
 
         let sub_variadic = self.log.txn_log_get::<VariadicTypePack, TypePackId>(sub_tp);
         if !sub_variadic.is_null() {

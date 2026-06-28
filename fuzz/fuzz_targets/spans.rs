@@ -46,8 +46,17 @@ fn exercise_input(data: &[u8]) {
                 d.line
             );
             let m = d.message.to_ascii_lowercase();
+            // Luau emits "Internal error: Code is too complex to typecheck!
+            // Consider adding type annotations around this area" as a LEGITIMATE
+            // user-facing complexity-limit diagnostic (verbatim from C++ Luau,
+            // Analysis/src/Error.cpp:345) — it just happens to start "Internal
+            // error:". It is NOT an ICE/assertion leak, so don't flag it.
+            let legit_complexity = m.contains("too complex to typecheck");
             assert!(
-                !m.contains("luau_assert") && !m.contains("internal error") && !m.contains("ice:"),
+                legit_complexity
+                    || (!m.contains("luau_assert")
+                        && !m.contains("internal error")
+                        && !m.contains("ice:")),
                 "diagnostic message leaks an internal compiler assertion: {:?}\n--- src ---\n{src}",
                 d.message
             );

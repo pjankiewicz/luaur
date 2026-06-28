@@ -145,7 +145,9 @@ impl Compiler {
                 } else {
                     -1
                 };
-                if fi >= 0 && wi > 0 && fi + wi <= 32 {
+                // Widen the add: `fi`/`wi` are folded user constants and `fi + wi`
+                // overflows `int` for huge fields (UB in C++; panic w/ overflow-checks).
+                if fi >= 0 && wi > 0 && fi as i64 + wi as i64 <= 32 {
                     let fwp = fi | ((wi - 1) << 5);
                     let cid = (*self.bytecode).add_constant_number(fwp as f64);
                     if cid >= 0 {

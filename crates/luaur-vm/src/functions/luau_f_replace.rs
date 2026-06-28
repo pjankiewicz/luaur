@@ -45,7 +45,7 @@ pub unsafe fn luau_f_replace(
             let a4 = nvalue!(args.offset(2));
             let w: i32 = a4 as i32;
 
-            if f >= 0 && w > 0 && f + w <= 32 {
+            if f >= 0 && w > 0 && f as i64 + w as i64 <= 32 {
                 let m: u32 = !(0xFFFF_FFFE_u32 << (w - 1));
                 let r: u32 = (n & !(m << (f as u32))) | ((v & m) << (f as u32));
                 setnvalue!(res, r as f64);

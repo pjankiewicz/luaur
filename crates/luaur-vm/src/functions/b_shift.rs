@@ -7,12 +7,15 @@ use crate::type_aliases::lua_state::lua_State;
 pub fn b_shift(l: *mut lua_State, mut r: b_uint, mut i: core::ffi::c_int) -> core::ffi::c_int {
     // Mirrors VM/src/lbitlib.cpp:b_shift
     if i < 0 {
-        i = -i;
+        // Magnitude of the (right) shift. `i.unsigned_abs()` is defined for
+        // `i == INT_MIN` (the C++ `i = -i` is UB there), and using it as the
+        // bound also avoids a shift-by->=32 (itself UB) — |i| >= NBITS yields 0.
+        let amount = i.unsigned_abs();
         r = trim(r);
-        if i >= NBITS as core::ffi::c_int {
+        if amount >= NBITS as u32 {
             r = 0;
         } else {
-            r >>= i as u32;
+            r >>= amount;
         }
     } else {
         if i >= NBITS as core::ffi::c_int {

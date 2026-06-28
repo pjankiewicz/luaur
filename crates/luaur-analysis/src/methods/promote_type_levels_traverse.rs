@@ -83,6 +83,12 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
             if (*ty).owning_arena != self.type_arena as *mut TypeArena {
                 return false;
             }
+            // Mirror `visit_type_id_free_type`: the txn log may have bound this
+            // type without committing; `is::<FunctionType>` goes through getMutable
+            // and asserts on a bound type, so short-circuit on `is::<BoundType>`.
+            if (*self.log).txn_log_is::<BoundType, TypeId>(ty) {
+                return true;
+            }
             if !(*self.log).txn_log_is::<FunctionType, TypeId>(ty) {
                 return true;
             }
@@ -104,6 +110,12 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
                 return true;
             }
 
+            // Mirror `visit_type_id_free_type`: the txn log may have bound this
+            // type without committing; `is::<TableType>` goes through getMutable
+            // and asserts on a bound type, so short-circuit on `is::<BoundType>`.
+            if (*self.log).txn_log_is::<BoundType, TypeId>(ty) {
+                return true;
+            }
             if !(*self.log).txn_log_is::<TableType, TypeId>(ty) {
                 return true;
             }

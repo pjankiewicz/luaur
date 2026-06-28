@@ -16,7 +16,9 @@ pub fn fieldargs(
         luaL_argcheck!(l, 0 <= f, farg, "field cannot be negative");
         luaL_argcheck!(l, 0 < w, farg + 1, "width must be positive");
 
-        if f + w > 32 {
+        // Widen the add: `f`/`w` are user-supplied and (with f>=0, w>0) `f + w`
+        // overflows `int` for huge f (UB in C++; panic with overflow-checks).
+        if f as i64 + w as i64 > 32 {
             luaL_error!(l, "trying to access non-existent bits");
         }
 
