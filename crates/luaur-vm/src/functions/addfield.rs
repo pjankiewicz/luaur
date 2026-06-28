@@ -20,9 +20,13 @@ use core::ffi::c_int;
 
 pub fn addfield(L: *mut lua_State, b: *mut LuaLStrbuf, i: i32, t: *mut LuaTable) {
     unsafe {
+        // C++ does `cast_to(unsigned, i - 1)` here; for i = INT_MIN the `i - 1`
+        // is signed-overflow UB upstream (ltablib.cpp:232). wrapping_sub matches
+        // the two's-complement value C++ relies on: it wraps to INT_MAX, fails the
+        // `< sizearray` bound, and falls through to the rawgeti slow path.
         if !t.is_null()
-            && ((i - 1) as u32) < (*t).sizearray as u32
-            && ttisstring!((*t).array.add((i - 1) as usize))
+            && (i.wrapping_sub(1) as u32) < (*t).sizearray as u32
+            && ttisstring!((*t).array.add(i.wrapping_sub(1) as usize))
         {
             let ts = tsvalue!((*t).array.add((i - 1) as usize));
             lua_l_addlstring(b, getstr(ts), (*ts).len as usize);

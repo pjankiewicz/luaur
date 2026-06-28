@@ -22,15 +22,22 @@ pub unsafe fn tunpack(L: *mut lua_State) -> core::ffi::c_int {
         return 0; // empty range
     }
 
-    let mut n = (e as u32).wrapping_sub(i as u32); // number of elements minus 1 (avoid overflows)
-    n = n.wrapping_add(1);
-    if n >= core::ffi::c_int::MAX as u32 || lua_checkstack(L, n as core::ffi::c_int) == 0 {
+    // `n` here is the element count MINUS ONE. C++ guards on this value
+    // (`n >= INT_MAX`) BEFORE adding one, so a full-range request
+    // (i = INT_MIN, e = INT_MAX -> n = 0xFFFF_FFFF) is rejected. Adding one first
+    // (as the previous port did) wrapped n to 0, passed the guard, and let the
+    // push loop overrun the stack into an api_incr_top assert (SIGTRAP).
+    let n = (e as u32).wrapping_sub(i as u32); // number of elements minus 1 (avoid overflows)
+    if n >= core::ffi::c_int::MAX as u32
+        || lua_checkstack(L, n.wrapping_add(1) as core::ffi::c_int) == 0
+    {
         lua_l_error_l(
             L,
             c"too many results to unpack".as_ptr(),
             core::format_args!("too many results to unpack"),
         );
     }
+    let n = n + 1; // safe: guard above guarantees n (minus one) < INT_MAX
 
     // fast-path: direct array-to-stack copy
     if i == 1 && (n as core::ffi::c_int) <= (*t).sizearray {

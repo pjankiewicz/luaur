@@ -38,6 +38,12 @@ pub unsafe fn tfind(L: *mut lua_State) -> core::ffi::c_int {
             lua_pushinteger(L, i);
             return 1;
         }
+        // C++ does `i++` unconditionally; if the table has an element at INT_MAX
+        // that doesn't match, the increment is signed-overflow UB (upstream
+        // ltablib.cpp:533). There is no valid index past INT_MAX, so stop cleanly.
+        if i == core::ffi::c_int::MAX {
+            break;
+        }
         i += 1;
     }
 
