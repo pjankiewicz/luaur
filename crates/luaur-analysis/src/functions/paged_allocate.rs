@@ -9,7 +9,10 @@ extern "C" {
         prot: c_int,
         flags: c_int,
         fd: c_int,
-        offset: isize,
+        // `off_t` is 64-bit on the LP64 native targets we support, and the wasm
+        // `wasm_libc` shim declares it `i64` too — `isize` would be `i32` on
+        // wasm32, a signature mismatch that breaks the wasm link. Use `i64`.
+        offset: i64,
     ) -> *mut c_void;
 }
 
