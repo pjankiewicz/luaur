@@ -14,7 +14,7 @@ impl AstVisitable for AstExprIfElse {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_expr_if_else_visit"]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn ast_expr_if_else_visit(
     this: *mut AstExprIfElse,

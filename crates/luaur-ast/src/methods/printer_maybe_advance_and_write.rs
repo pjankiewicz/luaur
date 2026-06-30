@@ -12,7 +12,7 @@ impl<'a> Printer<'a> {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_printer_maybe_advance_and_write"]
 pub extern "C" fn printer_maybe_advance_and_write(
     this: *mut Printer,
     pos: *const Position,

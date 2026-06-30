@@ -100,7 +100,7 @@ pub unsafe fn luai_num_2_str(mut buf: *mut core::ffi::c_char, n: f64) -> *mut co
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_luai_num2str"]
 #[allow(non_snake_case)]
 pub unsafe fn luai_num2str(buf: *mut core::ffi::c_char, n: f64) -> *mut core::ffi::c_char {
     luai_num_2_str(buf, n)

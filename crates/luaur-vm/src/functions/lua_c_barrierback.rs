@@ -21,7 +21,7 @@ pub unsafe fn lua_c_barrierback(l: *mut lua_State, o: *mut GCObject, gclist: *mu
     (*g).grayagain = o;
 }
 
-#[export_name = "luaC_barrierback"]
+#[export_name = "luaur_luaC_barrierback"]
 pub unsafe extern "C" fn lua_c_barrierback_export(
     l: *mut lua_State,
     o: *mut core::ffi::c_void,

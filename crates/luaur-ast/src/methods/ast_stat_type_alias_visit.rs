@@ -32,7 +32,7 @@ impl AstVisitable for AstStatTypeAlias {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_stat_type_alias_visit"]
 pub extern "C" fn ast_stat_type_alias_visit(
     this: *const AstStatTypeAlias,
     visitor: *mut dyn AstVisitor,

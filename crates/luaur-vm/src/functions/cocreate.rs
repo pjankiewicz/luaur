@@ -4,7 +4,7 @@ use crate::functions::lua_newthread::lua_newthread;
 use crate::functions::lua_xpush::lua_xpush;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_cocreate"]
 pub unsafe fn cocreate(l: *mut lua_State) -> core::ffi::c_int {
     lua_l_checktype(l, 1, lua_Type::LUA_TFUNCTION as core::ffi::c_int);
 

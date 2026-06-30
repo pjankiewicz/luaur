@@ -58,7 +58,7 @@ pub unsafe fn lua_v_dolen(L: *mut LuaState, ra: StkId, rb: *const TValue) {
     }
 }
 
-#[export_name = "luaV_dolen"]
+#[export_name = "luaur_luaV_dolen"]
 pub unsafe extern "C" fn lua_v_dolen_export(L: *mut LuaState, ra: StkId, rb: *const TValue) {
     lua_v_dolen(L, ra, rb);
 }

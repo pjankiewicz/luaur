@@ -43,7 +43,7 @@ pub unsafe fn forg_loop_non_table_fallback(
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_forgLoopNonTableFallback"]
 pub unsafe extern "C" fn forgLoopNonTableFallback(
     L: *mut luaur_vm::records::lua_state::LuaState,
     insn_a: i32,

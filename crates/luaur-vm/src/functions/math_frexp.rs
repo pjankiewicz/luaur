@@ -3,7 +3,7 @@ use crate::functions::lua_pushinteger::lua_pushinteger;
 use crate::functions::lua_pushnumber::lua_pushnumber;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_math_frexp"]
 pub unsafe fn math_frexp(l: *mut lua_State) -> i32 {
     let mut e: core::ffi::c_int = 0;
     let x = lua_l_checknumber(l, 1);

@@ -1,4 +1,4 @@
-#[no_mangle]
+#[export_name = "luaur_assertion_handler"]
 pub unsafe extern "C" fn assertion_handler(
     expr: *const core::ffi::c_char,
     file: *const core::ffi::c_char,

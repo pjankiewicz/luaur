@@ -1,7 +1,7 @@
 use crate::functions::lua_clock::lua_clock;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_luaC_allocationrate"]
 pub unsafe fn luaC_allocationrate(l: *mut lua_State) -> i64 {
     let g = (*l).global;
     let duration_threshold: f64 = 1e-3; // avoid measuring intervals smaller than 1ms

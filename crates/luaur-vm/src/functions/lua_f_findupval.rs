@@ -56,7 +56,7 @@ pub unsafe fn luaF_findupval(l: *mut lua_State, level: StkId) -> *mut UpVal {
 #[allow(unused_imports)]
 pub use luaF_findupval as lua_f_findupval;
 
-#[export_name = "luaF_findupval"]
+#[export_name = "luaur_luaF_findupval"]
 pub unsafe extern "C" fn lua_f_findupval_export(
     l: *mut lua_State,
     level: StkId,

@@ -81,7 +81,7 @@ pub unsafe fn lua_v_concat(L: *mut lua_State, mut total: i32, mut last: i32) {
     }
 }
 
-#[export_name = "luaV_concat"]
+#[export_name = "luaur_luaV_concat"]
 pub unsafe extern "C" fn lua_v_concat_export(L: *mut lua_State, total: i32, last: i32) {
     lua_v_concat(L, total, last);
 }

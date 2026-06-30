@@ -7,7 +7,7 @@ use crate::functions::resume_start::resume_start;
 use crate::macros::cast_byte::cast_byte;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_resumeerror"]
 pub unsafe fn lua_resumeerror(L: *mut lua_State, from: *mut lua_State) -> i32 {
     let starterror = resume_start(L, from, 1);
     if starterror != 0 {

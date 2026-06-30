@@ -23,7 +23,7 @@ impl CstTypeSingletonString {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_cst_type_singleton_string_cst_type_singleton_string"]
 pub extern "C" fn cst_type_singleton_string_cst_type_singleton_string(
     source_string: AstArray<core::ffi::c_char>,
     quote_style: crate::enums::quote_style_cst::QuoteStyle,

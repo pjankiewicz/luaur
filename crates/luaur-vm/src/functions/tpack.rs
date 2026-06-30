@@ -9,7 +9,7 @@ use crate::records::lua_state::lua_State;
 use crate::records::lua_t_value::TValue;
 use crate::records::lua_table::LuaTable;
 
-#[no_mangle]
+#[export_name = "luaur_tpack"]
 pub unsafe fn tpack(L: *mut lua_State) -> core::ffi::c_int {
     let n = lua_gettop(L); // number of elements to pack
     lua_createtable(L, n, 1); // create result table

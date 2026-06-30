@@ -3,7 +3,7 @@ use crate::records::call_info::CallInfo;
 use crate::records::lua_state::lua_State;
 use crate::type_aliases::lua_state::lua_State as LuaState;
 
-#[no_mangle]
+#[export_name = "luaur_luaG_isnative"]
 pub unsafe fn luaG_isnative(L: *mut lua_State, level: core::ffi::c_int) -> core::ffi::c_int {
     if (level as u32) >= ((unsafe { (*L).ci }).offset_from(unsafe { (*L).base_ci }) as u32) {
         return 0;

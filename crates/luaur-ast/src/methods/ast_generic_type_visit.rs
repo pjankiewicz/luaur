@@ -14,7 +14,7 @@ impl AstVisitable for AstGenericType {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_generic_type_visit"]
 pub extern "C" fn ast_generic_type_visit(this: *mut AstGenericType, visitor: *mut dyn AstVisitor) {
     unsafe {
         (*this).visit(&mut *visitor);

@@ -6,7 +6,7 @@ use crate::type_aliases::pfunc::Pfunc;
 use luaur_common::macros::luau_assert::LUAU_ASSERT;
 
 #[allow(non_camel_case_types)]
-#[no_mangle]
+#[export_name = "luaur_lua_d_rawrunprotected_mut"]
 pub unsafe fn lua_d_rawrunprotected_mut(
     L: *mut lua_State,
     f: Pfunc,

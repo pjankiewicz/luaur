@@ -212,7 +212,7 @@ pub unsafe fn lua_v_doarithimpl(
     }
 }
 
-#[export_name = "luaV_doarithimpl_TM_ADD"]
+#[export_name = "luaur_luaV_doarithimpl_TM_ADD"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_add(
     L: *mut lua_State,
     ra: StkId,
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_add(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_ADD);
 }
 
-#[export_name = "luaV_doarithimpl_TM_SUB"]
+#[export_name = "luaur_luaV_doarithimpl_TM_SUB"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_sub(
     L: *mut lua_State,
     ra: StkId,
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_sub(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_SUB);
 }
 
-#[export_name = "luaV_doarithimpl_TM_MUL"]
+#[export_name = "luaur_luaV_doarithimpl_TM_MUL"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_mul(
     L: *mut lua_State,
     ra: StkId,
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_mul(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_MUL);
 }
 
-#[export_name = "luaV_doarithimpl_TM_DIV"]
+#[export_name = "luaur_luaV_doarithimpl_TM_DIV"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_div(
     L: *mut lua_State,
     ra: StkId,
@@ -252,7 +252,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_div(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_DIV);
 }
 
-#[export_name = "luaV_doarithimpl_TM_IDIV"]
+#[export_name = "luaur_luaV_doarithimpl_TM_IDIV"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_idiv(
     L: *mut lua_State,
     ra: StkId,
@@ -262,7 +262,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_idiv(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_IDIV);
 }
 
-#[export_name = "luaV_doarithimpl_TM_MOD"]
+#[export_name = "luaur_luaV_doarithimpl_TM_MOD"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_mod(
     L: *mut lua_State,
     ra: StkId,
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_mod(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_MOD);
 }
 
-#[export_name = "luaV_doarithimpl_TM_POW"]
+#[export_name = "luaur_luaV_doarithimpl_TM_POW"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_pow(
     L: *mut lua_State,
     ra: StkId,
@@ -282,7 +282,7 @@ pub unsafe extern "C" fn lua_v_doarithimpl_tm_pow(
     lua_v_doarithimpl(L, ra, rb, rc, TMS::TM_POW);
 }
 
-#[export_name = "luaV_doarithimpl_TM_UNM"]
+#[export_name = "luaur_luaV_doarithimpl_TM_UNM"]
 pub unsafe extern "C" fn lua_v_doarithimpl_tm_unm(
     L: *mut lua_State,
     ra: StkId,

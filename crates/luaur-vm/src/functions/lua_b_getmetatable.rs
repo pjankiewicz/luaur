@@ -4,7 +4,7 @@ use crate::functions::lua_l_getmetafield::lua_l_getmetafield;
 use crate::functions::lua_pushnil::lua_pushnil;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_b_getmetatable"]
 pub unsafe fn lua_b_getmetatable(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checkany(L, 1);
 

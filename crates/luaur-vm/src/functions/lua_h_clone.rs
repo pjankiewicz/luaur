@@ -59,7 +59,7 @@ pub unsafe fn lua_h_clone(l: *mut lua_State, tt: *mut LuaTable) -> *mut LuaTable
 #[allow(unused_imports)]
 pub use lua_h_clone as luaH_clone;
 
-#[export_name = "luaH_clone"]
+#[export_name = "luaur_luaH_clone"]
 pub unsafe extern "C" fn lua_h_clone_export(
     l: *mut lua_State,
     tt: *mut core::ffi::c_void,

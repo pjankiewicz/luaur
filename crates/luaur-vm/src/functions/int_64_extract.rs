@@ -6,7 +6,7 @@ use crate::macros::lua_l_error::luaL_error;
 use crate::macros::mask_64::mask64;
 use crate::type_aliases::lua_state::LuaState;
 
-#[no_mangle]
+#[export_name = "luaur_int64_extract"]
 pub unsafe fn int64_extract(l: *mut LuaState) -> core::ffi::c_int {
     let n = lua_l_checkinteger_64(l, 1);
     let f = lua_l_checkinteger_64(l, 2);

@@ -4,7 +4,7 @@ use crate::macros::blackbit::BLACKBIT;
 use crate::macros::setobj_2_s::setobj_2_s;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_xmove"]
 pub unsafe fn lua_xmove(from: *mut lua_State, to: *mut lua_State, n: core::ffi::c_int) {
     api_check!(from, n >= 0);
 

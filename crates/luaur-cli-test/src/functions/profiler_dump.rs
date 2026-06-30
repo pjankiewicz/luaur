@@ -7,6 +7,7 @@ use alloc::format;
 use alloc::string::String;
 
 extern "C" {
+    #[link_name = "luaur_mut"]
     static mut gProfiler: ProfilerGlobal;
 }
 

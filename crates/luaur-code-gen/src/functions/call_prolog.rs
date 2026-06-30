@@ -55,7 +55,7 @@ unsafe fn incr_ci_local(L: *mut lua_State) -> *mut CallInfo {
     (*L).ci
 }
 
-#[no_mangle]
+#[export_name = "luaur_callProlog"]
 pub unsafe extern "C" fn callProlog(
     L: *mut lua_State,
     ra: *mut TValue,

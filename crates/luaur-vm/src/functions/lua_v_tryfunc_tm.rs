@@ -9,7 +9,7 @@ use crate::type_aliases::t_value::TValue;
 use luaur_common::macros::luau_noinline::LUAU_NOINLINE;
 
 #[allow(non_snake_case)]
-#[no_mangle]
+#[export_name = "luaur_lua_v_tryfunc_tm"]
 pub unsafe fn lua_v_tryfunc_tm(L: *mut LuaState, func: StkId) {
     let tm = lua_t_gettmbyobj(
         L as *mut lua_State,

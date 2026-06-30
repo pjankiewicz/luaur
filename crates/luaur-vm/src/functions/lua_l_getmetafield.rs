@@ -6,7 +6,7 @@ use crate::macros::lua_pop::lua_pop;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, c_int};
 
-#[no_mangle]
+#[export_name = "luaur_lua_l_getmetafield"]
 pub unsafe fn lua_l_getmetafield(L: *mut lua_State, obj: c_int, event: *const c_char) -> c_int {
     if lua_getmetatable(L, obj) == 0 {
         return 0; // no metatable

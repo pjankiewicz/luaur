@@ -11,7 +11,7 @@ use crate::macros::hvalue::hvalue;
 use crate::records::lua_l_strbuf::LuaLStrbuf;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_tconcat"]
 pub unsafe fn tconcat(L: *mut lua_State) -> core::ffi::c_int {
     let mut lsep: usize = 0;
     let sep = lua_l_optlstring(L, 2, core::ptr::null(), &mut lsep);

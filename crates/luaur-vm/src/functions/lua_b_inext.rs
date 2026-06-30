@@ -6,7 +6,7 @@ use crate::functions::lua_rawgeti::lua_rawgeti;
 use crate::macros::lua_isnil::lua_isnil;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_b_inext"]
 pub unsafe fn lua_b_inext(l: *mut lua_State) -> i32 {
     let mut i = luaL_checkinteger(l, 2);
     lua_l_checktype(l, 1, lua_Type::LUA_TTABLE as core::ffi::c_int);

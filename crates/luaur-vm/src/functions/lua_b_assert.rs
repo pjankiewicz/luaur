@@ -6,7 +6,7 @@ use crate::functions::lua_toboolean::lua_toboolean;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::CStr;
 
-#[no_mangle]
+#[export_name = "luaur_lua_b_assert"]
 pub unsafe fn lua_b_assert(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checkany(L, 1);
     if lua_toboolean(L, 1) == 0 {

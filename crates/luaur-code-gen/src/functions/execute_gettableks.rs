@@ -205,7 +205,7 @@ pub unsafe fn execute_gettableks(
     pc_ptr
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeGETTABLEKS"]
 pub unsafe extern "C" fn executeGETTABLEKS(
     L: *mut lua_State,
     pc: *const Instruction,

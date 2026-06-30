@@ -35,7 +35,7 @@ pub unsafe fn execute_getvarargs_const(L: *mut lua_State, base: StkId, rai: c_in
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeGETVARARGSConst"]
 pub unsafe extern "C" fn executeGETVARARGSConst(
     L: *mut lua_State,
     base: StkId,

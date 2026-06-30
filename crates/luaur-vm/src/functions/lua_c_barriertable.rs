@@ -35,7 +35,7 @@ pub unsafe fn luaC_barriertable(l: *mut lua_State, t: *mut LuaTable, v: *mut GCO
 #[allow(unused_imports)]
 pub use luaC_barriertable as lua_c_barriertable;
 
-#[export_name = "luaC_barriertable"]
+#[export_name = "luaur_luaC_barriertable"]
 pub unsafe extern "C" fn lua_c_barriertable_export(
     l: *mut lua_State,
     t: *mut core::ffi::c_void,

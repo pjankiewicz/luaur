@@ -19,7 +19,7 @@ pub unsafe fn forg_prep_xnext_fallback(L: *mut lua_State, ra: *mut TValue, pc: i
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_forgPrepXnextFallback"]
 pub unsafe extern "C" fn forgPrepXnextFallback(L: *mut lua_State, ra: *mut TValue, pc: i32) {
     forg_prep_xnext_fallback(L, ra, pc);
 }

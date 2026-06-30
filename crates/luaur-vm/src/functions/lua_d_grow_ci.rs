@@ -6,7 +6,7 @@ use crate::macros::luai_maxcalls::LUAI_MAXCALLS;
 use crate::type_aliases::call_info::CallInfo;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_luaD_growCI"]
 #[allow(non_snake_case)]
 pub unsafe fn luaD_growCI(L: *mut lua_State) -> *mut CallInfo {
     // allow extra stack space to handle stack overflow in xpcall

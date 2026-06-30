@@ -29,7 +29,7 @@ pub unsafe fn luaC_barrierf(l: *mut lua_State, o: *mut GCObject, v: *mut GCObjec
 #[allow(unused_imports)]
 pub use luaC_barrierf as lua_c_barrierf;
 
-#[export_name = "luaC_barrierf"]
+#[export_name = "luaur_luaC_barrierf"]
 pub unsafe extern "C" fn lua_c_barrierf_export(
     l: *mut lua_State,
     o: *mut core::ffi::c_void,

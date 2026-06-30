@@ -6,7 +6,7 @@ use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::macros::lua_l_checkstring::luaL_checkstring;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_int64_fromstring"]
 pub unsafe fn int64_fromstring(L: *mut lua_State) -> core::ffi::c_int {
     let s = luaL_checkstring!(L, 1);
     let base = lua_l_optinteger(L, 2, 10);

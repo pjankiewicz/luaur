@@ -7,7 +7,7 @@ use crate::macros::lua_s_new::luaS_new;
 use crate::records::t_string::TString;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_setlightuserdataname"]
 #[allow(non_snake_case)]
 pub unsafe fn lua_setlightuserdataname(
     L: *mut lua_State,

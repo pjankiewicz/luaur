@@ -24,7 +24,7 @@ pub unsafe fn lua_u_newudata(L: *mut lua_State, s: usize, tag: c_int) -> *mut Ud
 }
 
 #[allow(non_snake_case)]
-#[no_mangle]
+#[export_name = "luaur_luaU_newudata"]
 pub unsafe extern "C" fn luaU_newudata(L: *mut lua_State, s: usize, tag: c_int) -> *mut Udata {
     lua_u_newudata(L, s, tag)
 }

@@ -25,7 +25,7 @@ impl AstVisitable for AstStatLocal {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_stat_local_visit"]
 pub extern "C" fn ast_stat_local_visit(this: *mut AstStatLocal, visitor: *mut dyn AstVisitor) {
     unsafe {
         (*this).visit(&mut *visitor);

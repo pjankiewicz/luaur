@@ -4,7 +4,7 @@ use crate::luaL_checkstring;
 use crate::macros::lua_pushcclosure::lua_pushcclosure;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_gmatch"]
 pub unsafe fn gmatch(L: *mut lua_State) -> core::ffi::c_int {
     luaL_checkstring!(L, 1);
     luaL_checkstring!(L, 2);

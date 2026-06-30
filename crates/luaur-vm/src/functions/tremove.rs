@@ -8,7 +8,7 @@ use crate::functions::lua_rawseti::lua_rawseti;
 use crate::functions::moveelements::moveelements;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_tremove"]
 pub unsafe fn tremove(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checktype(L, 1, lua_Type::LUA_TTABLE as core::ffi::c_int);
     let n = lua_objlen(L, 1);

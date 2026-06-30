@@ -113,7 +113,7 @@ pub unsafe fn lua_v_gettable(
     lua_g_runerror!(L, "'__index' chain too long; possible loop");
 }
 
-#[export_name = "luaV_gettable"]
+#[export_name = "luaur_luaV_gettable"]
 pub unsafe extern "C" fn lua_v_gettable_export(
     L: *mut lua_State,
     t: *const TValue,

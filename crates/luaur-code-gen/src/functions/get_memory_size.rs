@@ -16,7 +16,7 @@ pub fn get_memory_size(L: *mut lua_State, proto: *mut Proto) -> usize {
     exec_data_size + exec_data_header.native_code_size
 }
 
-#[export_name = "get_memory_size"]
+#[export_name = "luaur_get_memory_size"]
 pub unsafe extern "C" fn get_memory_size_export(L: *mut lua_State, proto: *mut Proto) -> usize {
     get_memory_size(L, proto)
 }

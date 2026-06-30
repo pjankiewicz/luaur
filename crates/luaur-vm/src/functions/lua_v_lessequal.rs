@@ -38,7 +38,7 @@ pub unsafe fn lua_v_lessequal(L: *mut lua_State, l: *const TValue, r: *const TVa
     (res == 0) as i32
 }
 
-#[export_name = "luaV_lessequal"]
+#[export_name = "luaur_luaV_lessequal"]
 pub unsafe extern "C" fn lua_v_lessequal_export(
     L: *mut lua_State,
     l: *const TValue,

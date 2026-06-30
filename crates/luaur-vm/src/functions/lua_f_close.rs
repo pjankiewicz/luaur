@@ -26,7 +26,7 @@ pub unsafe fn luaF_close(l: *mut lua_State, level: StkId) {
 #[allow(unused_imports)]
 pub use luaF_close as lua_f_close;
 
-#[export_name = "luaF_close"]
+#[export_name = "luaur_luaF_close"]
 pub unsafe extern "C" fn lua_f_close_export(l: *mut lua_State, level: StkId) {
     luaF_close(l, level);
 }

@@ -6,7 +6,7 @@ use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::macros::lua_vector_size::LUA_VECTOR_SIZE;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_vector_clamp"]
 pub unsafe fn vector_clamp(l: *mut lua_State) -> core::ffi::c_int {
     let v = lua_l_checkvector(l, 1);
     let min = lua_l_checkvector(l, 2);

@@ -61,7 +61,7 @@ pub fn program_argv() -> *mut *mut c_char {
 
 // `struct GlobalOptions { int optimizationLevel = 1; int debugLevel = 1; }
 // globalOptions;` — the definition backing the `extern` declaration in copts.rs.
-#[no_mangle]
+#[export_name = "luaur_mut"]
 pub(crate) static mut globalOptions: GlobalOptions = GlobalOptions {
     optimizationLevel: 1,
     debugLevel: 1,

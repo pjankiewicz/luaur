@@ -44,7 +44,7 @@ pub unsafe fn luaF_newLclosure(
 #[allow(unused_imports)]
 pub use luaF_newLclosure as lua_f_new_lclosure;
 
-#[export_name = "luaF_newLclosure"]
+#[export_name = "luaur_luaF_newLclosure"]
 pub unsafe extern "C" fn lua_f_new_lclosure_export(
     l: *mut lua_State,
     nelems: c_int,

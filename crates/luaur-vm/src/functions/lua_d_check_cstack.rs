@@ -3,7 +3,7 @@ use crate::functions::lua_d_throw_ldo::lua_d_throw;
 use crate::macros::luai_maxccalls::LUAI_MAXCCALLS;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_luaD_checkCstack"]
 #[allow(non_snake_case)]
 pub unsafe fn luaD_checkCstack(L: *mut lua_State) {
     // allow extra stack space to handle stack overflow in xpcall

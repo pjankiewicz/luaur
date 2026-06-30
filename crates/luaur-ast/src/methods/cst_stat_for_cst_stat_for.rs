@@ -20,7 +20,7 @@ impl CstStatFor {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_cst_stat_for_cst_stat_for"]
 pub extern "C" fn cst_stat_for_cst_stat_for(
     annotation_colon_position: Position,
     equals_position: Position,

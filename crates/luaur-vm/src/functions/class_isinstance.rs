@@ -9,7 +9,7 @@ use crate::macros::ttisobject::ttisobject;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::t_value::TValue;
 
-#[no_mangle]
+#[export_name = "luaur_class_isinstance"]
 pub unsafe fn class_isinstance(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checkany(L, 1);
     lua_l_checktype(L, 2, lua_Type::LUA_TCLASS as core::ffi::c_int);

@@ -20,7 +20,7 @@ impl AstExprLocal {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_expr_local_ast_expr_local"]
 pub extern "C" fn ast_expr_local_ast_expr_local(
     location: Location,
     local: *mut AstLocal,

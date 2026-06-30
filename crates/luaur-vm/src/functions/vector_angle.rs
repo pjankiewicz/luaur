@@ -3,7 +3,7 @@ use crate::functions::lua_l_optvector::lua_l_optvector;
 use crate::functions::lua_pushnumber::lua_pushnumber;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_vector_angle"]
 pub unsafe fn vector_angle(l: *mut lua_State) -> i32 {
     let a = lua_l_checkvector(l, 1);
     let b = lua_l_optvector(l, 2, core::ptr::null());

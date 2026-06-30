@@ -5,7 +5,7 @@ use crate::macros::lua_isobject::lua_isobject;
 use crate::macros::objectvalue::objectvalue;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_class_classof"]
 pub unsafe fn class_classof(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checkany(L, 1);
 

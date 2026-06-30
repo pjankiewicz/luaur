@@ -21,7 +21,7 @@ impl CstStatAssign {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_cst_stat_assign_cst_stat_assign"]
 pub extern "C" fn cst_stat_assign_cst_stat_assign(
     vars_comma_positions: AstArray<Position>,
     equals_position: Position,

@@ -25,7 +25,7 @@ pub fn on_close_state(L: *mut lua_State) {
     }
 }
 
-#[export_name = "on_close_state"]
+#[export_name = "luaur_on_close_state"]
 pub unsafe extern "C" fn on_close_state_export(L: *mut lua_State) {
     on_close_state(L);
 }

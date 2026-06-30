@@ -3,7 +3,7 @@ use crate::macros::setvvalue::setvvalue;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::t_value::TValue;
 
-#[no_mangle]
+#[export_name = "luaur_lua_pushvector_lua_state_f32_f32_f32_f32"]
 pub unsafe fn lua_pushvector_lua_state_f32_f32_f32_f32(
     l: *mut lua_State,
     x: f32,

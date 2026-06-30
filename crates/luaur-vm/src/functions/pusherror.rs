@@ -9,7 +9,7 @@ use crate::macros::lua_idsize::LUA_IDSIZE;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, CStr};
 
-#[no_mangle]
+#[export_name = "luaur_pusherror"]
 pub unsafe fn pusherror(L: *mut lua_State, msg: *const c_char) {
     let ci = (*L).ci;
 

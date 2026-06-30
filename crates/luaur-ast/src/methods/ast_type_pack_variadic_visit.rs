@@ -12,7 +12,7 @@ impl AstVisitable for AstTypePackVariadic {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_type_pack_variadic_visit"]
 pub extern "C" fn ast_type_pack_variadic_visit(
     this: *const AstTypePackVariadic,
     visitor: *mut dyn AstVisitor,

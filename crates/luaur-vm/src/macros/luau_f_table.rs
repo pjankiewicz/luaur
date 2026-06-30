@@ -3,6 +3,6 @@
 use crate::type_aliases::luau_fast_function::luau_FastFunction;
 
 #[allow(non_upper_case_globals)]
-#[no_mangle]
+#[export_name = "luaur_luauF_table"]
 pub static luauF_table: [luau_FastFunction; 256] =
     [Some(crate::functions::luau_f_missing::luau_f_missing); 256];

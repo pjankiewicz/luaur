@@ -15,7 +15,7 @@ use crate::type_aliases::match_state::MatchState;
 use core::ffi::c_char;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_str_find_aux"]
 pub unsafe fn str_find_aux(l: *mut lua_State, find: c_int) -> c_int {
     let mut ls: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut ls);

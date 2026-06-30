@@ -14,7 +14,7 @@ impl<'a> Printer<'a> {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_printer_write_end"]
 pub extern "C" fn printer_write_end(this: *mut Printer, loc: *const Location) {
     unsafe {
         (*this).write_end(&*loc);

@@ -79,7 +79,7 @@ pub unsafe fn lua_h_getn(t: *mut LuaTable) -> c_int {
     }
 }
 
-#[export_name = "luaH_getn"]
+#[export_name = "luaur_luaH_getn"]
 pub unsafe extern "C" fn lua_h_getn_export(t: *mut core::ffi::c_void) -> c_int {
     lua_h_getn(t as *mut LuaTable)
 }

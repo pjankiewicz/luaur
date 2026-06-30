@@ -5,7 +5,7 @@ use crate::macros::setsvalue::setsvalue;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::stk_id::StkId;
 
-#[no_mangle]
+#[export_name = "luaur_luaD_seterrorobj"]
 pub unsafe fn luaD_seterrorobj(l: *mut lua_State, errcode: core::ffi::c_int, oldtop: StkId) {
     if errcode == lua_Status::LUA_ERRMEM as core::ffi::c_int {
         setsvalue!(l, oldtop, luaS_newliteral(l, c"not enough memory".as_ptr()));

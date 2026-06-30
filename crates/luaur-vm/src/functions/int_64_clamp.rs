@@ -3,7 +3,7 @@ use crate::functions::lua_pushinteger_64::lua_pushinteger_64;
 use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_int64_clamp"]
 pub unsafe fn int64_clamp(l: *mut lua_State) -> core::ffi::c_int {
     let a = luaL_checkinteger64(l, 1);
     let mi = luaL_checkinteger64(l, 2);

@@ -7,7 +7,7 @@ use crate::functions::lua_type::lua_type;
 use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_b_rawlen"]
 pub unsafe fn lua_b_rawlen(L: *mut lua_State) -> c_int {
     let tt = lua_type(L, 1);
 

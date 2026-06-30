@@ -47,7 +47,7 @@ pub unsafe fn call_epilog_c(L: *mut lua_State, nresults: i32, n: i32) {
     };
 }
 
-#[no_mangle]
+#[export_name = "luaur_callEpilogC"]
 pub unsafe extern "C" fn callEpilogC(L: *mut lua_State, nresults: i32, n: i32) {
     call_epilog_c(L, nresults, n);
 }

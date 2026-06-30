@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_int};
 
 const UTF8BUFFSZ: usize = 8;
 
-#[no_mangle]
+#[export_name = "luaur_utfchar"]
 pub unsafe fn utfchar(L: *mut lua_State) -> c_int {
     let mut buff = [0 as c_char; UTF8BUFFSZ];
     let mut charstr = core::ptr::null::<c_char>();

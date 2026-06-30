@@ -12,7 +12,7 @@ pub unsafe fn get_import(L: *mut lua_State, res: StkId, id: u32, pc: u32) {
     lua_v_getimport(L, (*cl).env, (*(*(*cl).inner.l).p).k, res, id, false);
 }
 
-#[no_mangle]
+#[export_name = "luaur_getImport"]
 pub unsafe extern "C" fn getImport(L: *mut lua_State, res: StkId, id: u32, pc: u32) {
     get_import(L, res, id, pc);
 }

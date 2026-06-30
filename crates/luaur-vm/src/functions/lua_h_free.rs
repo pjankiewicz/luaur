@@ -9,6 +9,7 @@ use crate::type_aliases::t_value::TValue;
 
 extern "C" {
     #[allow(non_upper_case_globals)]
+    #[link_name = "luaur_luaH_dummynode"]
     pub(crate) static luaH_dummynode: LuaNode;
 }
 

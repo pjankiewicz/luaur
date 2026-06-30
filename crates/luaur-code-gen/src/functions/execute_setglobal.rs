@@ -53,7 +53,7 @@ pub unsafe fn execute_setglobal(
     pc_ptr
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeSETGLOBAL"]
 pub unsafe extern "C" fn executeSETGLOBAL(
     L: *mut lua_State,
     pc: *const Instruction,

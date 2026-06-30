@@ -4,7 +4,7 @@ use crate::enums::lua_type::lua_Type;
 use crate::functions::lua_type::lua_type;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_isstring"]
 #[allow(non_snake_case)]
 pub unsafe fn lua_isstring(L: *mut lua_State, idx: c_int) -> c_int {
     let t = lua_type(L, idx);

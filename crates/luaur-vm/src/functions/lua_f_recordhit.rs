@@ -9,7 +9,7 @@ use crate::records::closure::Closure;
 use crate::records::lua_state::lua_State;
 use luaur_common::macros::luau_assert::LUAU_ASSERT;
 
-#[no_mangle]
+#[export_name = "luaur_luaF_recordhit"]
 #[allow(non_snake_case)]
 pub unsafe fn luaF_recordhit(
     l: *mut lua_State,

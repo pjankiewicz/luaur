@@ -19,7 +19,7 @@ pub fn get_counter_data(
     }
 }
 
-#[export_name = "get_counter_data"]
+#[export_name = "luaur_get_counter_data"]
 pub unsafe extern "C" fn get_counter_data_export(
     l: *mut crate::type_aliases::lua_state::lua_State,
     proto: *mut luaur_vm::records::proto::Proto,

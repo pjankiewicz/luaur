@@ -128,7 +128,7 @@ pub unsafe fn execute_settableks(
     pc_ptr
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeSETTABLEKS"]
 pub unsafe extern "C" fn executeSETTABLEKS(
     L: *mut lua_State,
     pc: *const Instruction,

@@ -3,7 +3,7 @@ use crate::functions::lua_pushinteger_64::lua_pushinteger_64;
 use crate::functions::lua_pushnil::lua_pushnil;
 use crate::type_aliases::lua_state::LuaState;
 
-#[no_mangle]
+#[export_name = "luaur_int64_create"]
 pub unsafe fn int64_create(l: *mut LuaState) -> core::ffi::c_int {
     let x = lua_l_checknumber(l, 1);
 

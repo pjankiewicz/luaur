@@ -7,7 +7,7 @@ use crate::macros::cast_int::cast_int;
 use crate::macros::co_status_error::CO_STATUS_ERROR;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_auxresumecont"]
 pub unsafe fn auxresumecont(L: *mut lua_State, co: *mut lua_State) -> core::ffi::c_int {
     if (*co).status == lua_Status::LUA_OK as u8 || (*co).status == lua_Status::LUA_YIELD as u8 {
         let nres = cast_int!((*co).top.offset_from((*co).base));

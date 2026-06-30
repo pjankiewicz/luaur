@@ -7,7 +7,7 @@ use crate::macros::ttype::ttype;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::stk_id::StkId;
 
-#[no_mangle]
+#[export_name = "luaur_lua_type"]
 #[allow(non_snake_case)]
 pub unsafe fn lua_type(L: *mut lua_State, idx: c_int) -> c_int {
     let o: StkId = index2addr(L, idx);

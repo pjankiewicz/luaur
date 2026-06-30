@@ -5,7 +5,7 @@ use crate::type_aliases::stk_id::StkId;
 
 use crate::macros::lua_o_nilobject::luaO_nilobject;
 
-#[no_mangle]
+#[export_name = "luaur_lua_rawequal"]
 #[allow(non_snake_case)]
 pub unsafe fn lua_rawequal(
     L: *mut lua_State,

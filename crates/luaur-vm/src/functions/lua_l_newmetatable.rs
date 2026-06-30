@@ -8,7 +8,7 @@ use crate::macros::lua_registryindex::LUA_REGISTRYINDEX;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, c_int};
 
-#[no_mangle]
+#[export_name = "luaur_lua_l_newmetatable"]
 pub unsafe fn lua_l_newmetatable(L: *mut lua_State, tname: *const c_char) -> c_int {
     lua_getfield(L, LUA_REGISTRYINDEX, tname);
 

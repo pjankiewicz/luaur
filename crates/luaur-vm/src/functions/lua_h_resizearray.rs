@@ -6,6 +6,7 @@ use crate::type_aliases::lua_table::LuaTable;
 
 extern "C" {
     #[allow(non_upper_case_globals)]
+    #[link_name = "luaur_luaH_dummynode"]
     pub(crate) static luaH_dummynode: crate::records::lua_node::LuaNode;
 }
 
@@ -24,7 +25,7 @@ pub fn lua_h_resizearray(L: *mut lua_State, t: *mut LuaTable, nasize: i32) {
     }
 }
 
-#[export_name = "luaH_resizearray"]
+#[export_name = "luaur_luaH_resizearray"]
 pub unsafe extern "C" fn lua_h_resizearray_export(
     L: *mut lua_State,
     t: *mut core::ffi::c_void,

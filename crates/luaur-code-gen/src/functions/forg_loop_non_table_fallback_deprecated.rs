@@ -38,7 +38,7 @@ pub unsafe fn forg_loop_non_table_fallback_deprecated(
     !ttisnil!(ra.add(3))
 }
 
-#[no_mangle]
+#[export_name = "luaur_forgLoopNonTableFallback_DEPRECATED"]
 pub unsafe extern "C" fn forgLoopNonTableFallback_DEPRECATED(
     L: *mut luaur_vm::records::lua_state::LuaState,
     insn_a: i32,

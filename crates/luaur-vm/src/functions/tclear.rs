@@ -5,7 +5,7 @@ use crate::functions::lua_l_checktype::lua_l_checktype;
 use crate::macros::hvalue::hvalue;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_tclear"]
 pub unsafe fn tclear(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checktype(L, 1, lua_Type::LUA_TTABLE as core::ffi::c_int);
 

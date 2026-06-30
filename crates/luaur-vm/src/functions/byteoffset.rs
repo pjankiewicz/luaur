@@ -10,7 +10,7 @@ use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_byteoffset"]
 pub unsafe fn byteoffset(L: *mut lua_State) -> c_int {
     let mut len: usize = 0;
     let s = lua_l_checklstring(L, 1, &mut len);

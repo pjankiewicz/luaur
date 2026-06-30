@@ -16,7 +16,7 @@ impl AstVisitable for AstExprCall {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_expr_call_visit"]
 pub extern "C" fn ast_expr_call_visit(this: *const AstExprCall, visitor: *mut dyn AstVisitor) {
     unsafe {
         (*this).visit(&mut *visitor);

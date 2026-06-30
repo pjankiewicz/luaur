@@ -1,3 +1,3 @@
 #[allow(non_upper_case_globals)]
-#[no_mangle]
+#[export_name = "luaur_mut"]
 pub static mut blockableReallocAllowed: bool = true;

@@ -76,7 +76,7 @@ pub unsafe fn forg_loop_node_iter(
     false
 }
 
-#[no_mangle]
+#[export_name = "luaur_forgLoopNodeIter"]
 pub unsafe extern "C" fn forgLoopNodeIter(
     L: *mut lua_State,
     h: *mut core::ffi::c_void,

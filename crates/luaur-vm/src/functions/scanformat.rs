@@ -4,7 +4,7 @@ use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_char;
 use core::ptr;
 
-#[no_mangle]
+#[export_name = "luaur_scanformat"]
 pub unsafe fn scanformat(
     L: *mut lua_State,
     strfrmt: *const c_char,

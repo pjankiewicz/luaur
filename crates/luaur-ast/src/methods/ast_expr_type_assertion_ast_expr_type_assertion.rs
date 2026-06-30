@@ -20,7 +20,7 @@ impl AstExprTypeAssertion {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_expr_type_assertion_ast_expr_type_assertion"]
 pub extern "C" fn ast_expr_type_assertion_ast_expr_type_assertion(
     location: Location,
     expr: *mut AstExpr,

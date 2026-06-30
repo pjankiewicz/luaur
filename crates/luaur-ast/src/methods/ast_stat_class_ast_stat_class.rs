@@ -31,7 +31,7 @@ impl AstStatClass {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_stat_class_ast_stat_class"]
 pub extern "C" fn ast_stat_class_ast_stat_class(
     location: Location,
     name: *mut AstLocal,

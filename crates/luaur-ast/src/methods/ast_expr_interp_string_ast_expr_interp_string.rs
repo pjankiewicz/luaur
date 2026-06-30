@@ -24,7 +24,7 @@ impl AstExprInterpString {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_expr_interp_string_ast_expr_interp_string"]
 pub extern "C" fn ast_expr_interp_string_ast_expr_interp_string(
     location: Location,
     strings: AstArray<AstArray<core::ffi::c_char>>,

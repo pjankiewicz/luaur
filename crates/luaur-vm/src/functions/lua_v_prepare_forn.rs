@@ -4,7 +4,7 @@ use crate::macros::ttisnumber::ttisnumber;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::stk_id::StkId;
 
-#[no_mangle]
+#[export_name = "luaur_lua_v_prepare_forn"]
 pub unsafe fn lua_v_prepare_forn(L: *mut lua_State, plimit: StkId, pstep: StkId, pinit: StkId) {
     if !ttisnumber!(pinit) && lua_v_tonumber(pinit, pinit).is_null() {
         lua_g_forerror_l(

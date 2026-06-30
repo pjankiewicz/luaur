@@ -3,7 +3,7 @@ use crate::functions::lua_pushnumber::lua_pushnumber;
 use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_math_clamp"]
 pub unsafe fn math_clamp(l: *mut lua_State) -> i32 {
     let v = lua_l_checknumber(l, 1);
     let min = lua_l_checknumber(l, 2);

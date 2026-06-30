@@ -8,7 +8,7 @@ use crate::records::lua_l_strbuf::LuaLStrbuf;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, c_int};
 
-#[no_mangle]
+#[export_name = "luaur_str_char"]
 pub unsafe fn str_char(L: *mut lua_State) -> c_int {
     let n = lua_gettop(L); // number of arguments
 

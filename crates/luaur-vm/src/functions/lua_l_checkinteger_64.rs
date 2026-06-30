@@ -4,13 +4,13 @@ use crate::functions::tag_error::tag_error;
 use crate::macros::lua_isinteger_64::lua_isinteger_64;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_luaL_checkinteger64"]
 #[allow(non_snake_case)]
 pub unsafe fn luaL_checkinteger64(L: *mut lua_State, narg: core::ffi::c_int) -> i64 {
     lua_l_checkinteger_64(L, narg)
 }
 
-#[no_mangle]
+#[export_name = "luaur_lua_l_checkinteger_64"]
 pub unsafe fn lua_l_checkinteger_64(L: *mut lua_State, narg: core::ffi::c_int) -> i64 {
     // The macro lua_isinteger_64! expands to a call to lua_type(L, narg).
     // Since lua_type is currently a stub taking 0 arguments and returning (),

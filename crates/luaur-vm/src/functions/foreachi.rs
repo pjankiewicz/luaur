@@ -9,7 +9,7 @@ use crate::macros::lua_isnil::lua_isnil;
 use crate::macros::lua_pop::lua_pop;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_foreachi"]
 pub unsafe fn foreachi(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checktype(L, 1, lua_Type::LUA_TTABLE as core::ffi::c_int);
     lua_l_checktype(L, 2, lua_Type::LUA_TFUNCTION as core::ffi::c_int);

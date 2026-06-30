@@ -104,7 +104,7 @@ pub unsafe fn execute_dupclosure(
     pc_ptr.add((*kcl).nupvalues as usize)
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeDUPCLOSURE"]
 pub unsafe extern "C" fn executeDUPCLOSURE(
     L: *mut lua_State,
     pc: *const Instruction,

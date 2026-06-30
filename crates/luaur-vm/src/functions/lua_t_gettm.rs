@@ -29,7 +29,7 @@ pub unsafe fn lua_t_gettm(events: *mut LuaTable, event: TMS, ename: *mut TString
     }
 }
 
-#[export_name = "luaT_gettm"]
+#[export_name = "luaur_luaT_gettm"]
 pub unsafe extern "C" fn lua_t_gettm_export(
     events: *mut core::ffi::c_void,
     event: TMS,

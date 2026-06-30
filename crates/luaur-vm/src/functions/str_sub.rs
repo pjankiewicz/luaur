@@ -7,7 +7,7 @@ use crate::macros::lua_pushliteral::LUA_PUSHLITERAL;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_str_sub"]
 pub unsafe fn str_sub(l: *mut lua_State) -> c_int {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);

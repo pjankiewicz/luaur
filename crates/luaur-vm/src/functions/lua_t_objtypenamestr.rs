@@ -66,7 +66,7 @@ pub unsafe fn lua_t_objtypenamestr(L: *mut lua_State, o: *const TValue) -> *cons
     (*(*L).global).ttname[ttype!(o) as usize]
 }
 
-#[export_name = "luaT_objtypenamestr"]
+#[export_name = "luaur_luaT_objtypenamestr"]
 pub unsafe extern "C" fn lua_t_objtypenamestr_export(
     L: *mut lua_State,
     o: *const TValue,

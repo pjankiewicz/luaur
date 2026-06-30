@@ -7,7 +7,7 @@ use crate::macros::lua_utag_limit::LUA_UTAG_LIMIT;
 use crate::records::lua_state::lua_State;
 use crate::records::lua_table::LuaTable;
 
-#[no_mangle]
+#[export_name = "luaur_lua_setuserdatametatable"]
 #[allow(non_snake_case)]
 pub unsafe fn lua_setuserdatametatable(l: *mut lua_State, tag: core::ffi::c_int) {
     crate::api_checknelems!(l, 1);

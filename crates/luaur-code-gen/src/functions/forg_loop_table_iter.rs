@@ -35,7 +35,7 @@ pub unsafe fn forg_loop_table_iter(
     false
 }
 
-#[no_mangle]
+#[export_name = "luaur_forgLoopTableIter"]
 pub unsafe extern "C" fn forgLoopTableIter(
     L: *mut LuaState,
     h: *mut core::ffi::c_void,

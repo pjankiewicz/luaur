@@ -3,7 +3,7 @@ use crate::functions::lua_l_checknumber::lua_l_checknumber;
 use crate::functions::lua_pushnumber::lua_pushnumber;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_math_ldexp"]
 pub unsafe fn math_ldexp(L: *mut lua_State) -> i32 {
     let x = lua_l_checknumber(L, 1);
     let exp = lua_l_checkinteger(L, 2);

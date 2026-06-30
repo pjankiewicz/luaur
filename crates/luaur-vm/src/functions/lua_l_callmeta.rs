@@ -5,7 +5,7 @@ use crate::macros::abs_index::abs_index;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, c_int};
 
-#[no_mangle]
+#[export_name = "luaur_lua_l_callmeta"]
 pub unsafe fn lua_l_callmeta(L: *mut lua_State, obj: c_int, event: *const c_char) -> c_int {
     let obj = abs_index(L, obj);
     if lua_l_getmetafield(L, obj, event) == 0 {

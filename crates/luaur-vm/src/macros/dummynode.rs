@@ -9,7 +9,7 @@ use crate::type_aliases::lua_node::LuaNode;
 pub struct DummyNodeSentinel(pub LuaNode);
 unsafe impl Sync for DummyNodeSentinel {}
 
-#[no_mangle]
+#[export_name = "luaur_luaH_dummynode"]
 #[allow(non_upper_case_globals)]
 pub static luaH_dummynode: DummyNodeSentinel = DummyNodeSentinel(LuaNode {
     val: crate::records::lua_t_value::TValue {

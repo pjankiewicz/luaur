@@ -4,7 +4,7 @@ use crate::functions::tag_error::tag_error;
 use crate::macros::lua_isboolean::lua_isboolean;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_l_checkboolean"]
 pub unsafe fn lua_l_checkboolean(L: *mut lua_State, narg: core::ffi::c_int) -> core::ffi::c_int {
     // This checks specifically for boolean values, ignoring
     // all other truthy/falsy values. If the desired result

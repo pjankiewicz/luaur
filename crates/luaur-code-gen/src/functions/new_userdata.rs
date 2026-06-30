@@ -8,6 +8,7 @@ use luaur_vm::records::udata::Udata;
 
 unsafe extern "C" {
     #[link_name = "luaU_newudata"]
+    #[link_name = "luaur_luaU_newudata"]
     fn luaU_newudata(L: *mut lua_State, s: usize, tag: c_int) -> *mut Udata;
 }
 
@@ -26,7 +27,7 @@ pub unsafe fn new_userdata(L: *mut lua_State, s: usize, tag: i32) -> *mut Udata 
     u
 }
 
-#[no_mangle]
+#[export_name = "luaur_newUserdata"]
 pub unsafe extern "C" fn newUserdata(
     L: *mut lua_State,
     s: usize,

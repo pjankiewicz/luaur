@@ -1,6 +1,6 @@
 use core::ffi::{c_char, c_long};
 
-#[no_mangle]
+#[export_name = "luaur_is_method_or_function_char"]
 pub unsafe extern "C" fn is_method_or_function_char(s: *const c_char, len: c_long) -> bool {
     if len != 1 {
         return false;

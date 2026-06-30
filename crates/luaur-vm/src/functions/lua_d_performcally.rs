@@ -8,7 +8,7 @@ use crate::records::call_info::CallInfo;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::stk_id::StkId;
 
-#[no_mangle]
+#[export_name = "luaur_lua_d_performcally"]
 pub unsafe fn lua_d_performcally(
     L: *mut lua_State,
     func: StkId,

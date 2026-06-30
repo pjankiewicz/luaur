@@ -5,7 +5,7 @@ use crate::macros::lua_l_argexpected::luaL_argexpected;
 use crate::type_aliases::lua_state::lua_State;
 use luaur_common::FFlag::FixMathNoisePrecision;
 
-#[no_mangle]
+#[export_name = "luaur_math_noise"]
 pub unsafe fn math_noise(L: *mut lua_State) -> i32 {
     let mut nx = 0;
     let mut ny = 0;

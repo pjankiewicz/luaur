@@ -7,7 +7,7 @@ use crate::functions::lua_settable::lua_settable;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::{c_char, c_int};
 
-#[no_mangle]
+#[export_name = "luaur_str_split"]
 pub unsafe fn str_split(l: *mut lua_State) -> c_int {
     extern "C" {
         fn memcmp(s1: *const core::ffi::c_void, s2: *const core::ffi::c_void, n: usize) -> c_int;

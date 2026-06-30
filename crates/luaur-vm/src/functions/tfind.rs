@@ -12,7 +12,7 @@ use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::stk_id::StkId;
 use crate::type_aliases::t_value::TValue;
 
-#[no_mangle]
+#[export_name = "luaur_tfind"]
 #[allow(non_snake_case)]
 pub unsafe fn tfind(L: *mut lua_State) -> core::ffi::c_int {
     lua_l_checktype(L, 1, lua_Type::LUA_TTABLE as core::ffi::c_int);

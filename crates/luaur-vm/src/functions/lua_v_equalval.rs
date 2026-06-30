@@ -114,7 +114,7 @@ pub unsafe fn lua_v_equalval(L: *mut LuaState, t1: *const TValue, t2: *const TVa
     }
 }
 
-#[export_name = "luaV_equalval"]
+#[export_name = "luaur_luaV_equalval"]
 pub unsafe extern "C" fn lua_v_equalval_export(
     L: *mut LuaState,
     t1: *const TValue,

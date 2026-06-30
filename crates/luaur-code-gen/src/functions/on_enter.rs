@@ -30,7 +30,7 @@ pub fn on_enter(
     }
 }
 
-#[export_name = "on_enter"]
+#[export_name = "luaur_on_enter"]
 pub unsafe extern "C" fn on_enter_export(
     l: *mut crate::type_aliases::lua_state::lua_State,
     proto: *mut luaur_vm::records::proto::Proto,

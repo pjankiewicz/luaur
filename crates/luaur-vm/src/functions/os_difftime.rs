@@ -3,7 +3,7 @@ use crate::functions::lua_l_optnumber::lua_l_optnumber;
 use crate::functions::lua_pushnumber::lua_pushnumber;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_os_difftime"]
 pub unsafe fn os_difftime(L: *mut lua_State) -> i32 {
     let t1 = lua_l_checknumber(L, 1);
     let t2 = lua_l_optnumber(L, 2, 0.0);

@@ -152,7 +152,7 @@ unsafe fn lua_d_call_protected(L: *mut lua_State, ra: StkId) {
     luaur_vm::functions::lua_d_call::lua_d_call(L, ra, 3);
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeFORGPREP"]
 pub unsafe extern "C" fn executeFORGPREP(
     L: *mut lua_State,
     pc: *const Instruction,

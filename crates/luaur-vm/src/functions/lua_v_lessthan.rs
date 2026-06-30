@@ -32,7 +32,7 @@ pub unsafe fn lua_v_lessthan(L: *mut lua_State, l: *const TValue, r: *const TVal
     }
 }
 
-#[export_name = "luaV_lessthan"]
+#[export_name = "luaur_luaV_lessthan"]
 pub unsafe extern "C" fn lua_v_lessthan_export(
     L: *mut lua_State,
     l: *const TValue,

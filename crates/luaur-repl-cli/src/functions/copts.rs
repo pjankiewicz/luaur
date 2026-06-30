@@ -9,6 +9,7 @@ pub(crate) struct GlobalOptions {
 }
 
 extern "C" {
+    #[link_name = "luaur_mut"]
     pub(crate) static mut globalOptions: GlobalOptions;
 }
 

@@ -15,5 +15,5 @@ impl IrFunction {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ir_function_int_64_op"]
 pub extern "C" fn ir_function_int_64_op() {}

@@ -60,7 +60,7 @@ pub unsafe fn on_disable(L: *mut lua_State, proto: *mut Proto) {
     lua_m_visitgco(L, proto as *mut c_void, on_disable_visitor as *mut c_void);
 }
 
-#[export_name = "on_disable"]
+#[export_name = "luaur_on_disable"]
 pub unsafe extern "C" fn on_disable_export(L: *mut lua_State, proto: *mut Proto) {
     on_disable(L, proto);
 }

@@ -7,7 +7,7 @@ use crate::records::lua_state::lua_State;
 use luaur_common::enums::luau_opcode::LuauOpcode;
 use luaur_common::macros::luau_insn_op::LUAU_INSN_OP;
 
-#[no_mangle]
+#[export_name = "luaur_luaG_onbreak"]
 #[allow(non_snake_case)]
 pub unsafe fn luaG_onbreak(l: *mut lua_State) -> bool {
     if (*l).ci == (*l).base_ci {

@@ -3,7 +3,7 @@ use crate::functions::lua_l_checkinteger_64::lua_l_checkinteger_64;
 use crate::functions::lua_pushboolean::lua_pushboolean;
 use crate::type_aliases::lua_state::LuaState;
 
-#[no_mangle]
+#[export_name = "luaur_int64_btest"]
 pub unsafe fn int64_btest(l: *mut LuaState) -> core::ffi::c_int {
     let mut tres: u64 = u64::MAX;
     let n = lua_gettop(l);

@@ -101,7 +101,7 @@ pub unsafe fn lua_v_settable(
     lua_g_runerror!(L, "'__newindex' chain too long; possible loop");
 }
 
-#[export_name = "luaV_settable"]
+#[export_name = "luaur_luaV_settable"]
 pub unsafe extern "C" fn lua_v_settable_export(
     L: *mut lua_State,
     t: *const TValue,

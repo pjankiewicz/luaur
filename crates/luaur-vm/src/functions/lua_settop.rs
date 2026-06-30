@@ -5,7 +5,7 @@ use crate::macros::api_check::api_check;
 use crate::macros::setnilvalue::setnilvalue;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_settop"]
 pub unsafe fn lua_settop(L: *mut lua_State, idx: c_int) {
     if idx >= 0 {
         api_check!(

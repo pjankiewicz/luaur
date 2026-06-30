@@ -23,12 +23,18 @@ pub fn initialize_execution_callbacks(
 }
 
 extern "C" {
+    #[link_name = "luaur_on_close_state"]
     fn on_close_state(L: *mut lua_State);
+    #[link_name = "luaur_on_destroy_function"]
     fn on_destroy_function(L: *mut lua_State, proto: *mut luaur_vm::records::proto::Proto);
+    #[link_name = "luaur_on_enter"]
     fn on_enter(L: *mut lua_State, proto: *mut luaur_vm::records::proto::Proto)
         -> core::ffi::c_int;
+    #[link_name = "luaur_on_disable"]
     fn on_disable(L: *mut lua_State, proto: *mut luaur_vm::records::proto::Proto);
+    #[link_name = "luaur_get_memory_size"]
     fn get_memory_size(L: *mut lua_State, proto: *mut luaur_vm::records::proto::Proto) -> usize;
+    #[link_name = "luaur_get_counter_data"]
     fn get_counter_data(
         L: *mut lua_State,
         proto: *mut luaur_vm::records::proto::Proto,

@@ -5,7 +5,7 @@ use crate::macros::lua_pop::lua_pop;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_char;
 
-#[no_mangle]
+#[export_name = "luaur_lua_b_print"]
 pub unsafe fn lua_b_print(l: *mut lua_State) -> i32 {
     let n = lua_gettop(l);
     for i in 1..=n {

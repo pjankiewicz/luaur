@@ -2,7 +2,7 @@ use crate::functions::lua_insert::lua_insert;
 use crate::functions::lua_pushboolean::lua_pushboolean;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_coresumefinish"]
 pub unsafe fn coresumefinish(L: *mut lua_State, r: core::ffi::c_int) -> core::ffi::c_int {
     if r < 0 {
         lua_pushboolean(L, 0);

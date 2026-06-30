@@ -4,7 +4,7 @@ use crate::macros::setbvalue::setbvalue;
 use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::t_value::TValue;
 
-#[no_mangle]
+#[export_name = "luaur_lua_pushboolean"]
 pub unsafe fn lua_pushboolean(L: *mut lua_State, b: core::ffi::c_int) {
     // The setbvalue macro requires TValue and lua_Type to be in scope at the call site.
     setbvalue!((*L).top, b != 0); // ensure that true is 1

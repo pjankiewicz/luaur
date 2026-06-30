@@ -44,7 +44,7 @@ pub unsafe fn execute_getvarargs_mult_ret(
     (*l_ptr).top = ra.add(n as usize);
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeGETVARARGSMultRet"]
 pub unsafe extern "C" fn executeGETVARARGSMultRet(
     L: *mut lua_State,
     pc: *const Instruction,

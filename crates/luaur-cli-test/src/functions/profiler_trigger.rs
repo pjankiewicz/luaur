@@ -10,6 +10,7 @@ use alloc::string::String;
 // stackScratch, data, gc, and callbacks) must be provided by other translated items before this
 // can be made functional.
 extern "C" {
+    #[link_name = "luaur_mut"]
     static mut gProfiler: c_void;
 }
 

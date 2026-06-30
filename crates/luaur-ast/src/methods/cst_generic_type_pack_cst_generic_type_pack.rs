@@ -15,7 +15,7 @@ impl CstGenericTypePack {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_cst_generic_type_pack_cst_generic_type_pack"]
 pub extern "C" fn cst_generic_type_pack_cst_generic_type_pack(
     ellipsis_position: Position,
     default_equals_position: Position,

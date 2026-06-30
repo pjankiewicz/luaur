@@ -13,7 +13,7 @@ use crate::type_aliases::lua_table::LuaTable;
 use crate::type_aliases::sort_predicate::SortPredicate;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_tsort"]
 pub unsafe fn tsort(L: *mut lua_State) -> c_int {
     lua_l_checktype(L, 1, lua_Type::LUA_TTABLE as c_int);
 

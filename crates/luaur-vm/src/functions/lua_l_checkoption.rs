@@ -7,7 +7,7 @@ use core::ffi::c_char;
 use core::ffi::c_int;
 use core::ffi::CStr;
 
-#[no_mangle]
+#[export_name = "luaur_luaL_checkoption"]
 pub unsafe fn luaL_checkoption(
     L: *mut lua_State,
     narg: c_int,

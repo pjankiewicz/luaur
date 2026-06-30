@@ -3,7 +3,7 @@ use crate::functions::lua_l_checkinteger_64::lua_l_checkinteger_64;
 use crate::functions::lua_pushinteger_64::lua_pushinteger_64;
 use crate::type_aliases::lua_state::LuaState;
 
-#[no_mangle]
+#[export_name = "luaur_int_64_bxor"]
 pub unsafe fn int_64_bxor(l: *mut LuaState) -> core::ffi::c_int {
     let mut tres: u64 = 0;
     let n = lua_gettop(l);

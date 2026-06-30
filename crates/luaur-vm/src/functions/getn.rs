@@ -4,7 +4,7 @@ use crate::functions::lua_objlen::lua_objlen;
 use crate::functions::lua_pushinteger::lua_pushinteger;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_getn"]
 pub unsafe fn getn(l: *mut lua_State) -> core::ffi::c_int {
     lua_l_checktype(l, 1, lua_Type::LUA_TTABLE as core::ffi::c_int);
 

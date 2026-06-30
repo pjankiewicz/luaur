@@ -8,7 +8,7 @@ use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_tfreeze"]
 pub unsafe fn tfreeze(l: *mut lua_State) -> c_int {
     lua_l_checktype(l, 1, lua_Type::LUA_TTABLE as c_int);
 

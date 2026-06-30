@@ -9,7 +9,7 @@ use crate::macros::uchar::uchar;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_str_byte"]
 pub unsafe fn str_byte(L: *mut lua_State) -> c_int {
     let mut len: usize = 0;
     let s = lua_l_checklstring(L, 1, &mut len);

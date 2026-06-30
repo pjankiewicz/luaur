@@ -72,7 +72,7 @@ pub unsafe fn execute_setlist(
     pc_ptr
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeSETLIST"]
 pub unsafe extern "C" fn executeSETLIST(
     L: *mut lua_State,
     pc: *const Instruction,

@@ -8,7 +8,7 @@ use crate::macros::lua_l_argcheck::luaL_argcheck;
 use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_int;
 
-#[no_mangle]
+#[export_name = "luaur_utflen"]
 pub unsafe fn utflen(L: *mut lua_State) -> c_int {
     let mut n: c_int = 0;
     let mut len: usize = 0;

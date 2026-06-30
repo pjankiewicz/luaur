@@ -37,7 +37,7 @@ pub unsafe fn luaH_setnum(
     }
 }
 
-#[export_name = "luaH_setnum"]
+#[export_name = "luaur_luaH_setnum"]
 pub unsafe extern "C" fn lua_h_setnum_export(
     l: *mut lua_State,
     t: *mut core::ffi::c_void,

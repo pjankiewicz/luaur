@@ -28,7 +28,7 @@ impl<'a> Printer<'a> {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_printer_visualize_block_ast_stat_block"]
 pub extern "C" fn printer_visualize_block_ast_stat_block(
     this: *mut Printer,
     block: *mut AstStatBlock,

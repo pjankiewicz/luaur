@@ -20,7 +20,7 @@ pub fn on_destroy_function(L: *mut lua_State, proto: *mut Proto) {
     }
 }
 
-#[export_name = "on_destroy_function"]
+#[export_name = "luaur_on_destroy_function"]
 pub unsafe extern "C" fn on_destroy_function_export(L: *mut lua_State, proto: *mut Proto) {
     on_destroy_function(L, proto);
 }

@@ -10,7 +10,7 @@ use crate::type_aliases::value::Value;
 pub struct NilSentinel(pub TValue);
 unsafe impl Sync for NilSentinel {}
 
-#[no_mangle]
+#[export_name = "luaur_luaO_nilobject_"]
 #[allow(non_upper_case_globals)]
 pub static luaO_nilobject_: NilSentinel = NilSentinel(TValue {
     value: Value {

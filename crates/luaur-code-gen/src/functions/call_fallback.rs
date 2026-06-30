@@ -136,7 +136,7 @@ unsafe fn incr_ci_local(L: *mut lua_State) -> *mut CallInfo {
     (*L).ci
 }
 
-#[no_mangle]
+#[export_name = "luaur_callFallback"]
 pub unsafe extern "C" fn callFallback(
     L: *mut lua_State,
     ra: StkId,

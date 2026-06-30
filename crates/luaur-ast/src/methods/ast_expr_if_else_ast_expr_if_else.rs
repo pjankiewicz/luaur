@@ -29,7 +29,7 @@ impl AstExprIfElse {
     }
 }
 
-#[no_mangle]
+#[export_name = "luaur_ast_expr_if_else_ast_expr_if_else"]
 pub extern "C" fn ast_expr_if_else_ast_expr_if_else(
     location: &Location,
     condition: *mut AstExpr,

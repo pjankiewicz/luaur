@@ -4,7 +4,7 @@ use crate::type_aliases::lua_state::lua_State;
 use core::ffi::c_char;
 use core::ffi::CStr;
 
-#[no_mangle]
+#[export_name = "luaur_lua_g_pusherror"]
 pub unsafe fn lua_g_pusherror(l: *mut lua_State, error: *const c_char) {
     // The provided lua_rawcheckstack stub has no arguments, but the logic requires (L, n).
     // We cast the function pointer to the correct signature to satisfy the call.

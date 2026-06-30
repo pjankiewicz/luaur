@@ -10,7 +10,7 @@ use crate::type_aliases::lua_state::lua_State;
 use crate::type_aliases::stk_id::StkId;
 use luaur_common::macros::luau_assert::LUAU_ASSERT;
 
-#[no_mangle]
+#[export_name = "luaur_lua_d_callny"]
 pub unsafe fn lua_d_callny(L: *mut lua_State, func: StkId, nresults: core::ffi::c_int) {
     let l_ref = &mut *L;
 

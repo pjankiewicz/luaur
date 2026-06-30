@@ -59,7 +59,7 @@ pub unsafe fn execute_prepvarargs(
     pc_ptr
 }
 
-#[no_mangle]
+#[export_name = "luaur_executePREPVARARGS"]
 pub unsafe extern "C" fn executePREPVARARGS(
     L: *mut lua_State,
     pc: *const Instruction,

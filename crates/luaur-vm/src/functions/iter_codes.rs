@@ -4,7 +4,7 @@ use crate::luaL_checkstring;
 use crate::macros::lua_pushcfunction::LUA_PUSHCFUNCTION;
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_iter_codes"]
 pub unsafe fn iter_codes(L: *mut lua_State) -> core::ffi::c_int {
     luaL_checkstring!(L, 1);
     LUA_PUSHCFUNCTION(

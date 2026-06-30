@@ -8,7 +8,7 @@ use crate::records::native_proto_exec_data_header::NativeProtoExecDataHeader;
 /// structure. The caller must ensure that `instruction_offsets` points to a valid
 /// `NativeProtoExecData` block previously allocated by `createNativeProtoExecData`.
 /// The pointer must not be used after this call.
-#[no_mangle]
+#[export_name = "luaur_destroy_native_proto_exec_data"]
 pub unsafe extern "C" fn destroy_native_proto_exec_data(instruction_offsets: *const u32) {
     if instruction_offsets.is_null() {
         return;

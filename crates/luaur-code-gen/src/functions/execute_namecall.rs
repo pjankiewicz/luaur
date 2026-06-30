@@ -143,7 +143,7 @@ pub unsafe fn execute_namecall(
     pc_ptr
 }
 
-#[no_mangle]
+#[export_name = "luaur_executeNAMECALL"]
 pub unsafe extern "C" fn executeNAMECALL(
     L: *mut lua_State,
     pc: *const Instruction,

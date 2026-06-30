@@ -40,7 +40,7 @@ pub unsafe fn lua_h_new(l: *mut lua_State, narray: c_int, nhash: c_int) -> *mut 
     t
 }
 
-#[export_name = "luaH_new"]
+#[export_name = "luaur_luaH_new"]
 pub unsafe extern "C" fn lua_h_new_export(
     l: *mut lua_State,
     narray: c_int,

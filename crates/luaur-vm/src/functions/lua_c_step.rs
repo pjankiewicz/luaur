@@ -76,7 +76,7 @@ pub unsafe fn luaC_step(l: *mut lua_State, assist: bool) -> usize {
     actualstepsize
 }
 
-#[export_name = "luaC_step"]
+#[export_name = "luaur_luaC_step"]
 pub unsafe extern "C" fn lua_c_step_export(l: *mut lua_State, assist: bool) -> usize {
     luaC_step(l, assist)
 }

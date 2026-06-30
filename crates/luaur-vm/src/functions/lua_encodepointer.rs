@@ -1,6 +1,6 @@
 use crate::type_aliases::lua_state::lua_State;
 
-#[no_mangle]
+#[export_name = "luaur_lua_encodepointer"]
 pub unsafe fn lua_encodepointer(l: *mut lua_State, p: usize) -> usize {
     let g = (*l).global;
     let p = p as u64;
