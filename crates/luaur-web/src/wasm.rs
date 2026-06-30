@@ -28,8 +28,11 @@ use alloc::string::ToString;
 use core::cell::RefCell;
 use core::ffi::c_char;
 use core::ffi::c_int;
+use core::ffi::CStr;
 
 use wasm_bindgen::prelude::wasm_bindgen;
+
+use luaur_vm::records::lua_exception::lua_exception;
 
 use crate::functions::check_script::check_script;
 use crate::functions::run_code::run_code;
@@ -47,12 +50,68 @@ use luaur_vm::macros::lua_pop::lua_pop;
 use luaur_vm::macros::lua_setglobal::lua_setglobal;
 use luaur_vm::type_aliases::lua_state::lua_State;
 
-/// Module start hook: route Rust panics to `console.error` with a readable
-/// message + location instead of an opaque `unreachable` wasm trap. Runs once
-/// when the module is instantiated.
+#[wasm_bindgen]
+extern "C" {
+    // app.js installs `globalThis.__luaurOnRuntimeError` before any run. A Lua
+    // runtime error is emulated with `panic_any` (luaD_throw); on stable
+    // wasm32-unknown-unknown (`panic = "abort"`) that traps the instance and the
+    // message would otherwise be lost. The panic hook hands the recovered error
+    // text to JS HERE, before the abort — so the playground reports a typed,
+    // messaged runtime error (classified by the trap being a `lua_exception`),
+    // never by scanning output text.
+    #[wasm_bindgen(js_namespace = globalThis, js_name = __luaurOnRuntimeError)]
+    fn on_runtime_error(message: &str);
+}
+
+/// Module start hook. A Lua runtime error reaches this panic hook as a
+/// `lua_exception` payload (`luaD_throw` -> `panic_any`). We recover its message
+/// (`what()` reads the error object off the still-intact stack — `panic=abort`
+/// does not unwind) and hand it to JS *before* the abort traps the instance, so
+/// runtime errors surface with their text instead of an opaque `unreachable`
+/// trap. Any other panic keeps the `console.error` diagnostic.
+///
+/// ## Hook ordering — why this is more than a single `set_hook`
+///
+/// The VM installs its OWN process-wide hook ([`install_lua_exception_panic_hook`],
+/// fired lazily on the first `luaD_rawrunprotected` during state setup) that
+/// *silently swallows* every `lua_exception` payload: those panics are its
+/// `longjmp` emulation, not crashes, and the CLI must not print "thread panicked"
+/// for a normal `error()`. That same swallowing, however, also hides the error
+/// *message* — the VM hook `take_hook()`s whatever we install and then `return`s
+/// early for `lua_exception`, so a naive hook here would never be reached.
+///
+/// So we deliberately build the chain with OUR hook outermost (it runs first):
+///
+/// ```text
+///   ours (lua_exception -> JS bridge)  ->  VM hook  ->  console_error_panic_hook
+/// ```
+///
+/// Force `console_error_panic_hook` as the base, force the VM hook to install on
+/// top of it *now* (so its captured `previous` is the console hook, not ours),
+/// then wrap that with our hook. A `lua_exception` is intercepted here and its
+/// message forwarded to JS; any real Rust bug falls through to the VM hook, which
+/// delegates to `console_error_panic_hook` unchanged.
 #[wasm_bindgen(start)]
 pub fn wasm_start() {
-    console_error_panic_hook::set_once();
+    use luaur_vm::functions::install_lua_exception_panic_hook::install_lua_exception_panic_hook;
+    use std::panic;
+
+    panic::set_hook(Box::new(|info| console_error_panic_hook::hook(info)));
+    install_lua_exception_panic_hook();
+    let previous = panic::take_hook();
+    panic::set_hook(Box::new(move |info| {
+        if let Some(exc) = info.payload().downcast_ref::<lua_exception>() {
+            let p = exc.what();
+            let msg = if p.is_null() {
+                String::new()
+            } else {
+                unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
+            };
+            on_runtime_error(&msg);
+        } else {
+            previous(info);
+        }
+    }));
 }
 
 thread_local! {
