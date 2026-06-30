@@ -33,3 +33,10 @@ post.md
 research/*.md
 fuzz/corpus-cmin/
 fuzz/.afl-showmap-temp-*
+
+# Playground smoke-test deps + Playwright MCP scratch artifacts
+node_modules/
+.playwright-mcp/
+
+# Built wasm engine — regenerated per build; the deploy repo ships its own copy
+website/pkg/

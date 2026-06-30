@@ -22,6 +22,16 @@ import { setMemory } from "./env.js";
 let engine = null; // { run, check }
 let engineGen = 0; // cache-buster so each reload gets a fresh module instance
 
+// A Lua *runtime* error traps the wasm instance (panic=abort on
+// wasm32-unknown-unknown), which loses the return value. Before the trap, the
+// engine's panic hook calls this with the recovered Lua error text, so we can
+// show a typed, messaged runtime error rather than an opaque trap. Installed on
+// globalThis (where the wasm-bindgen import looks) before any engine call.
+let lastRuntimeError = "";
+globalThis.__luaurOnRuntimeError = (msg) => {
+  lastRuntimeError = String(msg ?? "");
+};
+
 async function loadEngine() {
   engineGen += 1;
   const mod = await import(`./pkg/luaur_web.js?gen=${engineGen}`);
@@ -290,6 +300,23 @@ end
 print("total score:", total)   -- 60
 `,
   },
+  globals: {
+    label: "Iterate _G (the global table)",
+    source: `-- globals.luau
+-- Iterate _G, the table holding every global. A nod to the reader who reported
+-- that this snippet's output used to show up red: the globals include one
+-- literally named "error", and an old build classified a run as failed by
+-- scanning the output text for words like that. Now success vs. error is decided
+-- from a typed result, never the output's contents — so this prints just fine.
+
+print(_G)
+for i, v in _G do
+\tprint(i)
+\tprint(v)
+end
+print("Done")
+`,
+  },
   type_error: {
     label: "Type error (run Type-check!)",
     source: `--!strict
@@ -551,7 +578,9 @@ function suppressAutoCheckBriefly() {
 // error, error(), failed pcall) leaves the instance poisoned. Detect it,
 // explain it, and transparently reload a fresh engine so the next run works.
 function isTrap(e) {
-  return e instanceof WebAssembly.RuntimeError || /unreachable|table index|out of bounds/i.test(String(e && e.message));
+  // A trapped wasm instance throws a *typed* WebAssembly.RuntimeError. Classify
+  // purely on the type — never by pattern-matching the message text.
+  return e instanceof WebAssembly.RuntimeError;
 }
 
 async function recoverFromTrap() {
@@ -571,30 +600,18 @@ async function doRun() {
   setStatus("running…", "running");
   await frame();
   let result;
+  lastRuntimeError = "";
   try {
     result = engine.run(src);
   } catch (e) {
     if (isTrap(e)) {
-      // A *runtime* Lua error (error(), nil-index, failed assert/pcall) — or a
-      // parse error — traps the instance, because recoverable panics can't
-      // unwind on stable wasm32-unknown-unknown (panic = "abort"). We can't
-      // recover the exact message text from a trap, so we say so honestly and
-      // reload the engine transparently. Type-check catches most mistakes
-      // *before* Run, on the path that is fully precise on this build.
-      writeOutput("⚠  Runtime error.", "out-warn");
-      appendOutputHtml(
-        '<span class="caveat">' +
-          "The in-browser build (stable <code>wasm32-unknown-unknown</code>, " +
-          "<code>panic=abort</code>) can run and type-check, but it <b>cannot capture the " +
-          "exact text of a runtime error</b> — that path traps the WebAssembly instance. " +
-          "<br><br>" +
-          "Most mistakes are caught precisely by <b>Type-check</b> " +
-          "(it runs automatically as you edit). For full runtime-error messages and " +
-          "stack traces, the <code>luaur</code> CLI prints them in full." +
-          "<br><br>" +
-          "The engine has been reloaded — the next Run works normally." +
-          "</span>"
-      );
+      // A *runtime* Lua error (error(), nil-index, failed assert/pcall) traps the
+      // instance — recoverable panics can't unwind on stable
+      // wasm32-unknown-unknown (panic = "abort"). But the engine's panic hook
+      // handed us the recovered error text via globalThis.__luaurOnRuntimeError
+      // *before* the trap, so we show it. (Classification is typed: the throw is
+      // a WebAssembly.RuntimeError; the message comes from the hook, not regex.)
+      writeOutput(lastRuntimeError || "Runtime error.", "out-err");
       setStatus("runtime error", "error");
       suppressAutoCheckBriefly();
       await recoverFromTrap();
