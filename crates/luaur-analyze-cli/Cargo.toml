@@ -18,15 +18,15 @@ path = "src/main.rs"
 
 [dependencies]
 wasm-bindgen = { version = "0.2", optional = true }
-luaur-analysis = { path = "../luaur-analysis", version = "0.1.6" }
-luaur-ast = { path = "../luaur-ast", version = "0.1.6" }
-luaur-bytecode = { path = "../luaur-bytecode", version = "0.1.6" }
-luaur-cli-lib = { path = "../luaur-cli-lib", version = "0.1.6" }
-luaur-common = { path = "../luaur-common", version = "0.1.6" }
-luaur-compiler = { path = "../luaur-compiler", version = "0.1.6" }
-luaur-config = { path = "../luaur-config", version = "0.1.6" }
-luaur-require = { path = "../luaur-require", version = "0.1.6" }
-luaur-vm = { path = "../luaur-vm", version = "0.1.6" }
+luaur-analysis = { path = "../luaur-analysis", version = "0.1.7" }
+luaur-ast = { path = "../luaur-ast", version = "0.1.7" }
+luaur-bytecode = { path = "../luaur-bytecode", version = "0.1.7" }
+luaur-cli-lib = { path = "../luaur-cli-lib", version = "0.1.7" }
+luaur-common = { path = "../luaur-common", version = "0.1.7" }
+luaur-compiler = { path = "../luaur-compiler", version = "0.1.7" }
+luaur-config = { path = "../luaur-config", version = "0.1.7" }
+luaur-require = { path = "../luaur-require", version = "0.1.7" }
+luaur-vm = { path = "../luaur-vm", version = "0.1.7" }
 
 [features]
 default = ["std"]

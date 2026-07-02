@@ -48,23 +48,23 @@ typecheck = ["dep:luaur-analysis", "dep:luaur-config"]
 send = []
 
 [dependencies]
-luaur-common = { path = "../luaur-common", version = "0.1.6" }
+luaur-common = { path = "../luaur-common", version = "0.1.7" }
 # Optional: only pulled in by the `macros` feature. Provides the
 # `#[derive(UserData)]` / `#[derive(FromLua)]` proc-macros, re-exported below.
-luaur-rt-derive = { path = "../luaur-rt-derive", version = "0.1.6", optional = true }
-luaur-compiler = { path = "../luaur-compiler", version = "0.1.6" }
-luaur-vm = { path = "../luaur-vm", version = "0.1.6" }
+luaur-rt-derive = { path = "../luaur-rt-derive", version = "0.1.7", optional = true }
+luaur-compiler = { path = "../luaur-compiler", version = "0.1.7" }
+luaur-vm = { path = "../luaur-vm", version = "0.1.7" }
 # Needed by `Chunk` to drive the compiler with default parse/encode options,
 # mirroring the umbrella `luaur` crate's `compile` helper.
-luaur-ast = { path = "../luaur-ast", version = "0.1.6" }
-luaur-bytecode = { path = "../luaur-bytecode", version = "0.1.6" }
+luaur-ast = { path = "../luaur-ast", version = "0.1.7" }
+luaur-bytecode = { path = "../luaur-bytecode", version = "0.1.7" }
 # Optional: only pulled in by the `typecheck` feature. Provides Luau's static
 # type checker (the `Frontend` + builtins) used by `Lua::check` / `Chunk::check`
 # and the free `check` / `check_with_definitions` helpers.
-luaur-analysis = { path = "../luaur-analysis", version = "0.1.6", optional = true }
+luaur-analysis = { path = "../luaur-analysis", version = "0.1.7", optional = true }
 # Optional: only pulled in by the `typecheck` feature. Provides the `Config`
 # the type-checker's config resolver returns.
-luaur-config = { path = "../luaur-config", version = "0.1.6", optional = true }
+luaur-config = { path = "../luaur-config", version = "0.1.7", optional = true }
 
 # Optional: only pulled in by the `serde` feature. We implement the
 # Serializer/Deserializer directly over luaur-rt's `Value`/`Table`, so plain

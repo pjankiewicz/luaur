@@ -228,7 +228,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "luaur"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-analysis",
  "luaur-ast",
@@ -244,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-analysis"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-analyze-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-analysis",
  "luaur-ast",
@@ -274,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-ast"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-common",
  "wasm-bindgen",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-ast-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-analysis",
  "luaur-ast",
@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-bytecode"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-common",
  "wasm-bindgen",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-bytecode-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-cli-lib"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-cli-test"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-code-gen"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-common",
  "luaur-vm",
@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-common"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "libc",
  "wasm-bindgen",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-compile-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-compiler"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-config"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-conformance"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-analysis",
  "luaur-ast",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-e2e"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "assert_cmd",
  "luaur",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-reduce-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-analysis",
  "luaur-ast",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-repl-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-require"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-ast",
  "luaur-bytecode",
@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-rt"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bstr",
  "futures-util",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-rt-derive"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -555,7 +555,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-unit-test"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-analysis",
  "luaur-ast",
@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-vm"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "luaur-common",
  "wasm-bindgen",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "luaur-web"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "console_error_panic_hook",
  "luaur-analysis",

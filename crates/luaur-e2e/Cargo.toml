@@ -13,12 +13,12 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-luaur = { path = "../luaur", version = "0.1.6" }
-luaur-common = { path = "../luaur-common", version = "0.1.6" }
+luaur = { path = "../luaur", version = "0.1.7" }
+luaur-common = { path = "../luaur-common", version = "0.1.7" }
 
 [dev-dependencies]
-luaur = { path = "../luaur", version = "0.1.6" }
-luaur-common = { path = "../luaur-common", version = "0.1.6" }
+luaur = { path = "../luaur", version = "0.1.7" }
+luaur-common = { path = "../luaur-common", version = "0.1.7" }
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
@@ -26,9 +26,9 @@ serde_json = "1"
 
 # Pull in the CLI crates so cargo exposes their binaries to assert_cmd's
 # `cargo_bin(..)` lookup (CARGO_BIN_EXE_* / target-dir discovery) deterministically.
-luaur-repl-cli = { path = "../luaur-repl-cli", version = "0.1.6" }
-luaur-analyze-cli = { path = "../luaur-analyze-cli", version = "0.1.6" }
-luaur-ast-cli = { path = "../luaur-ast-cli", version = "0.1.6" }
-luaur-compile-cli = { path = "../luaur-compile-cli", version = "0.1.6" }
-luaur-bytecode-cli = { path = "../luaur-bytecode-cli", version = "0.1.6" }
-luaur-reduce-cli = { path = "../luaur-reduce-cli", version = "0.1.6" }
+luaur-repl-cli = { path = "../luaur-repl-cli", version = "0.1.7" }
+luaur-analyze-cli = { path = "../luaur-analyze-cli", version = "0.1.7" }
+luaur-ast-cli = { path = "../luaur-ast-cli", version = "0.1.7" }
+luaur-compile-cli = { path = "../luaur-compile-cli", version = "0.1.7" }
+luaur-bytecode-cli = { path = "../luaur-bytecode-cli", version = "0.1.7" }
+luaur-reduce-cli = { path = "../luaur-reduce-cli", version = "0.1.7" }

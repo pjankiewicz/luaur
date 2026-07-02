@@ -14,8 +14,8 @@ crate-type = ["rlib"]
 
 [dependencies]
 wasm-bindgen = { version = "0.2", optional = true }
-luaur-common = { path = "../luaur-common", version = "0.1.6" }
-luaur-vm = { path = "../luaur-vm", version = "0.1.6" }
+luaur-common = { path = "../luaur-common", version = "0.1.7" }
+luaur-vm = { path = "../luaur-vm", version = "0.1.7" }
 
 [features]
 default = ["std"]
