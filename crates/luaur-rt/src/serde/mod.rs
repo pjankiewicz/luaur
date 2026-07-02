@@ -48,52 +48,76 @@ pub use value_serialize::{SerializableTable, SerializableValue};
 // `LightUserData`, so the `null` value is modelled as a dedicated, unique empty
 // table per `Lua`; the array metatable is likewise a unique table per `Lua`.
 //
-// Both are cached in a thread-local keyed by the raw state pointer. `Lua` is
-// `!Send`/`!Sync` (single-threaded), so a thread-local is sound: every handle
-// to a given VM lives on the same thread. Each cached `Table` holds its own
-// registry reference, keeping the underlying Lua object alive for the lifetime
-// of the cache entry. This whole mechanism is compiled only under the `serde`
-// feature.
+// The tables are ROOTED IN THE LUA REGISTRY (named registry keys) — part of the
+// state, freed when it closes. A thread-local keyed by the raw state pointer
+// caches only their raw POINTERS for the identity check; it holds no `Table` or
+// registry HANDLE. That is deliberate: a handle owns an `XRc<LuaInner>`, so
+// caching one here would keep the whole VM alive forever (the state could never
+// drop) and, at thread/process exit, dropping the cached handle into an
+// already-freed state aborts ("thread local panicked on drop"). Caching only raw
+// pointers breaks that cycle — the user's `Lua` closes normally, and
+// `clear_sentinels` (from `LuaInner::drop`) evicts the pointer entry. `Lua` is
+// `!Send`/`!Sync` (single-threaded), so the thread-local is sound. Compiled only
+// under the `serde` feature.
 // ---------------------------------------------------------------------------
 
-struct StateSentinels {
-    null: Table,
-    array_metatable: Table,
+/// Registry names under which a state's sentinel tables are rooted. Each Lua
+/// state has its own registry, so these do not collide across states.
+const NULL_REGISTRY_NAME: &str = "__luaur_serde_null_sentinel";
+const ARRAY_MT_REGISTRY_NAME: &str = "__luaur_serde_array_metatable";
+
+/// Raw POINTERS of a state's sentinel tables, cached for the identity check.
+/// Not `Table` handles: a handle owns an `XRc<LuaInner>`, so caching one here
+/// would pin the whole VM alive forever and abort at thread-local teardown (see
+/// the module note). Raw pointers are `Copy` and own nothing.
+#[derive(Clone, Copy)]
+struct SentinelPtrs {
+    null: *const core::ffi::c_void,
+    array_metatable: *const core::ffi::c_void,
 }
 
 thread_local! {
-    static SENTINELS: RefCell<HashMap<*mut lua_State, StateSentinels>> =
+    static SENTINELS: RefCell<HashMap<*mut lua_State, SentinelPtrs>> =
         RefCell::new(HashMap::new());
 }
 
-/// Returns the per-`Lua` `null` sentinel table, creating it on first use.
-pub(crate) fn null_table(lua: &Lua) -> Table {
+/// Ensure both sentinel tables exist for `lua`: create them, root them in the
+/// registry (so they outlive the local handles without pinning the VM), and
+/// cache their pointers. Idempotent.
+fn ensure_sentinels(lua: &Lua) {
     let key = lua.state();
-    SENTINELS.with(|cell| {
-        cell.borrow_mut()
-            .entry(key)
-            .or_insert_with(|| StateSentinels {
-                null: lua.create_table(),
-                array_metatable: build_array_metatable(lua),
-            })
-            .null
-            .clone()
-    })
+    if SENTINELS.with(|c| c.borrow().contains_key(&key)) {
+        return;
+    }
+    let null = lua.create_table();
+    let array_metatable = build_array_metatable(lua);
+    let ptrs = SentinelPtrs {
+        null: null.to_pointer(),
+        array_metatable: array_metatable.to_pointer(),
+    };
+    // Root the tables in the registry (freed with the state on `lua_close`); the
+    // thread-local keeps only their pointers.
+    let _ = lua.set_named_registry_value(NULL_REGISTRY_NAME, null);
+    let _ = lua.set_named_registry_value(ARRAY_MT_REGISTRY_NAME, array_metatable);
+    SENTINELS.with(|c| {
+        c.borrow_mut().insert(key, ptrs);
+    });
+}
+
+/// Returns the per-`Lua` `null` sentinel table, creating it on first use. The
+/// returned handle is transient (fetched from the registry); it drops after the
+/// caller, so nothing permanent pins the VM.
+pub(crate) fn null_table(lua: &Lua) -> Table {
+    ensure_sentinels(lua);
+    lua.named_registry_value::<Table>(NULL_REGISTRY_NAME)
+        .expect("serde null sentinel is rooted in the registry")
 }
 
 /// Returns the per-`Lua` array metatable, creating it on first use.
 pub(crate) fn array_metatable_table(lua: &Lua) -> Table {
-    let key = lua.state();
-    SENTINELS.with(|cell| {
-        cell.borrow_mut()
-            .entry(key)
-            .or_insert_with(|| StateSentinels {
-                null: lua.create_table(),
-                array_metatable: build_array_metatable(lua),
-            })
-            .array_metatable
-            .clone()
-    })
+    ensure_sentinels(lua);
+    lua.named_registry_value::<Table>(ARRAY_MT_REGISTRY_NAME)
+        .expect("serde array metatable is rooted in the registry")
 }
 
 /// Build the array metatable: a fresh table with `__metatable = false` so Lua
@@ -115,7 +139,7 @@ pub(crate) fn is_null(value: &Value) -> bool {
         return SENTINELS.with(|cell| {
             cell.borrow()
                 .get(&key)
-                .map(|s| s.null.to_pointer() == t.to_pointer())
+                .map(|s| s.null == t.to_pointer())
                 .unwrap_or(false)
         });
     }
@@ -125,11 +149,7 @@ pub(crate) fn is_null(value: &Value) -> bool {
 /// Whether `table` carries the array metatable (compared by pointer identity).
 pub(crate) fn has_array_metatable(table: &Table) -> bool {
     let key = table.lua().state();
-    let array_ptr = SENTINELS.with(|cell| {
-        cell.borrow()
-            .get(&key)
-            .map(|s| s.array_metatable.to_pointer())
-    });
+    let array_ptr = SENTINELS.with(|cell| cell.borrow().get(&key).map(|s| s.array_metatable));
     match array_ptr {
         Some(ptr) => table
             .metatable()
@@ -137,6 +157,15 @@ pub(crate) fn has_array_metatable(table: &Table) -> bool {
             .unwrap_or(false),
         None => false,
     }
+}
+
+/// Evict this state's cached sentinel POINTERS. Called from `LuaInner::drop`; the
+/// sentinel tables themselves are freed with the state's registry on `lua_close`.
+/// Without this the (now stale) pointer entry would leak one slot per state.
+pub(crate) fn clear_sentinels(state: *mut lua_State) {
+    SENTINELS.with(|c| {
+        c.borrow_mut().remove(&state);
+    });
 }
 
 /// Trait for serializing/deserializing Lua values using Serde. Mirrors
@@ -209,4 +238,9 @@ impl LuaSerdeExt for Lua {
     {
         T::deserialize(de::Deserializer::new_with_options(value, options))
     }
+}
+
+#[cfg(test)]
+pub(crate) fn sentinels_len() -> usize {
+    SENTINELS.with(|m| m.borrow().len())
 }

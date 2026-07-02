@@ -12,11 +12,6 @@ use crate::table::Table;
 use crate::thread::Thread;
 
 thread_local! {
-    /// Per-VM saved *original* globals table (used to revert `sandbox(false)`),
-    /// keyed by the global-state pointer.
-    static SANDBOX_SAVED_GLOBALS: RefCell<HashMap<*mut core::ffi::c_void, Table>> =
-        RefCell::new(HashMap::new());
-
     /// Per-VM compiler installed via `Lua::set_compiler`, keyed by global state.
     static VM_COMPILERS: RefCell<HashMap<*mut core::ffi::c_void, Compiler>> =
         RefCell::new(HashMap::new());
@@ -32,8 +27,32 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
+/// Registry name under which `sandbox(true)` saves the ORIGINAL globals table so
+/// `sandbox(false)` can restore it. Kept in the state's registry (freed on
+/// `lua_close`), NOT in a thread-local `Table` handle: a handle owns an
+/// `XRc<LuaInner>`, so a thread-local holding it would pin the VM alive forever
+/// (the state could never drop) if the caller dropped a still-sandboxed `Lua`.
+const SANDBOX_SAVED_GLOBALS_NAME: &str = "__luaur_sandbox_saved_globals";
+
 unsafe fn global_key(state: *mut lua_State) -> *mut core::ffi::c_void {
     unsafe { (*state).global as *mut core::ffi::c_void }
+}
+
+/// Drop this VM's compiler / catch-panics / sandboxed-flag entries so they don't
+/// leak one slot per state created. Called from `LuaInner::drop`. (These hold no
+/// Lua handle, so the state drops normally and this runs; the saved-globals table
+/// lives in the registry and is freed with the state on `lua_close`.)
+pub(crate) fn clear_vm_state(state: *mut lua_State) {
+    let key = unsafe { global_key(state) };
+    VM_COMPILERS.with(|m| {
+        m.borrow_mut().remove(&key);
+    });
+    VM_CATCH_PANICS.with(|m| {
+        m.borrow_mut().remove(&key);
+    });
+    VM_SANDBOXED.with(|m| {
+        m.borrow_mut().remove(&key);
+    });
 }
 
 impl Lua {
@@ -58,20 +77,25 @@ impl Lua {
         });
         unsafe {
             if enabled {
-                // Save the original globals table so we can restore it later.
-                let original = self.globals();
-                SANDBOX_SAVED_GLOBALS.with(|m| {
-                    m.borrow_mut().entry(key).or_insert(original);
-                });
+                // Save the ORIGINAL globals table (once) in the registry so we can
+                // restore it later. Registry-rooted, not a thread-local handle —
+                // see SANDBOX_SAVED_GLOBALS_NAME. `or_insert` semantics: only save
+                // if not already saved (a second sandbox(true) keeps the first).
+                if self
+                    .named_registry_value::<Table>(SANDBOX_SAVED_GLOBALS_NAME)
+                    .is_err()
+                {
+                    let original = self.globals();
+                    let _ = self.set_named_registry_value(SANDBOX_SAVED_GLOBALS_NAME, original);
+                }
                 // Make libraries + base metatables read-only and set safeenv.
                 lua_l_sandbox(state);
                 // Install the proxy global table for script-level writes.
                 lua_l_sandboxthread(state);
             } else {
                 // Restore the original globals table (dropping the proxy and any
-                // globals written into it).
-                let saved = SANDBOX_SAVED_GLOBALS.with(|m| m.borrow_mut().remove(&key));
-                if let Some(orig) = saved {
+                // globals written into it), then clear the saved slot.
+                if let Ok(orig) = self.named_registry_value::<Table>(SANDBOX_SAVED_GLOBALS_NAME) {
                     orig.push_to_stack();
                     lua_replace(state, LUA_GLOBALSINDEX);
                     // Clear read-only + safeenv on the restored globals so it is
@@ -80,6 +104,11 @@ impl Lua {
                     lua_setsafeenv(state, LUA_GLOBALSINDEX, 0);
                     // Also clear read-only on the library tables.
                     self.clear_library_readonly();
+                    // Clear the saved slot so a later sandbox(true) re-saves.
+                    let _ = self.set_named_registry_value(
+                        SANDBOX_SAVED_GLOBALS_NAME,
+                        crate::value::Value::Nil,
+                    );
                 }
             }
         }
@@ -314,4 +343,9 @@ impl TypeMetatable for crate::light_userdata::LightUserData {
 /// function-type metatable slot.
 unsafe fn noop_cfn(_state: *mut lua_State) -> c_int {
     0
+}
+
+#[cfg(test)]
+pub(crate) fn vm_compilers_len() -> usize {
+    VM_COMPILERS.with(|m| m.borrow().len())
 }

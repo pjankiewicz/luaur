@@ -84,6 +84,17 @@ impl Lua {
     }
 }
 
+/// Drop this VM's interrupt closure. Called from `LuaInner::drop` so the closure
+/// (and anything it captured) is released and the per-VM map entry does not leak
+/// one slot per state created. (If a closure captured Lua handles it would pin
+/// the VM and this never runs — but the common case captures non-Lua state.)
+pub(crate) fn clear_interrupt(state: *mut lua_State) {
+    let key = unsafe { vm_key(state) };
+    INTERRUPTS.with(|m| {
+        m.borrow_mut().remove(&key);
+    });
+}
+
 /// The fixed C trampoline installed as `lua_callbacks().interrupt`.
 ///
 /// `gc` is non-negative only for GC interrupts; mlua ignores GC interrupts in
@@ -147,4 +158,9 @@ unsafe fn raise_error(state: *mut lua_State, e: &Error) -> ! {
         lua_pushlstring(state, msg.as_ptr() as *const c_char, msg.len());
         lua_error(state)
     }
+}
+
+#[cfg(test)]
+pub(crate) fn interrupts_len() -> usize {
+    INTERRUPTS.with(|m| m.borrow().len())
 }

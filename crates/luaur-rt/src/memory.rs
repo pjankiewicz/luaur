@@ -62,6 +62,27 @@ unsafe fn global_key(state: *mut lua_State) -> *mut core::ffi::c_void {
     unsafe { (*state).global as *mut core::ffi::c_void }
 }
 
+/// The global-state pointer for `state`, exposed for `LuaInner::drop` to capture
+/// the memory-map key BEFORE `lua_close` frees the state.
+pub(crate) unsafe fn memory_key(state: *mut lua_State) -> *mut core::ffi::c_void {
+    unsafe { global_key(state) }
+}
+
+/// Drop this VM's memory-control + category entries so they don't leak one slot
+/// per state created. Called from `LuaInner::drop` **after** `lua_close`: the
+/// `MemoryControl` whose address was handed to the VM as the allocator `ud` must
+/// stay live for the entire close (which frees every object through it), so this
+/// takes `key` — the global-state pointer captured *before* close, since the
+/// state is freed by the time this runs.
+pub(crate) fn clear_memory(key: *mut core::ffi::c_void) {
+    MEMORY_CONTROLS.with(|m| {
+        m.borrow_mut().remove(&key);
+    });
+    MEMORY_CATEGORIES.with(|m| {
+        m.borrow_mut().remove(&key);
+    });
+}
+
 /// The limit-enforcing allocator. Reads the live `totalbytes` from the global
 /// state and refuses any growing allocation that would push it past the cap.
 unsafe extern "C" fn limited_alloc(
@@ -184,4 +205,9 @@ impl Lua {
             Some((*g).memcatbytes[id as usize])
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn memory_controls_len() -> usize {
+    MEMORY_CONTROLS.with(|m| m.borrow().len())
 }

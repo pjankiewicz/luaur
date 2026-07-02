@@ -279,3 +279,94 @@ fn integer_range_check_rejects_overflow() {
     let err = lua.load("return id_u8(300)").exec();
     assert!(err.is_err(), "u8 conversion from 300 must error");
 }
+
+// ---------------------------------------------------------------------------
+// Per-VM thread-local cleanup on drop. Each per-VM map (interrupt closure,
+// memory control, compiler, serde sentinels) is keyed by the state/global
+// pointer; before this was wired into `LuaInner::drop`, an entry leaked one
+// slot per state created (and the serde sentinel — holding a `Table` handle —
+// additionally pinned the whole VM alive and aborted at thread-local teardown).
+// These tests assert the maps return to their prior size after the states drop.
+// Delta-based so they're robust to any states other tests leave live.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn interrupt_map_does_not_leak_across_dropped_states() {
+    let before = crate::interrupt::interrupts_len();
+    for _ in 0..20 {
+        let lua = Lua::new();
+        lua.set_interrupt(|_| Ok(crate::interrupt::VmState::Continue));
+        // drop without remove_interrupt -> before the fix this leaked an entry
+    }
+    assert_eq!(
+        crate::interrupt::interrupts_len(),
+        before,
+        "interrupt map leaked entries after dropping states"
+    );
+}
+
+#[test]
+fn memory_control_map_does_not_leak_across_dropped_states() {
+    let before = crate::memory::memory_controls_len();
+    for _ in 0..20 {
+        let lua = Lua::new();
+        lua.set_memory_limit(1 << 20).unwrap();
+    }
+    assert_eq!(
+        crate::memory::memory_controls_len(),
+        before,
+        "memory-control map leaked entries after dropping states"
+    );
+}
+
+#[test]
+fn compiler_map_does_not_leak_across_dropped_states() {
+    let before = crate::luau_ext::vm_compilers_len();
+    for _ in 0..20 {
+        let lua = Lua::new();
+        lua.set_compiler(crate::compiler::Compiler::new());
+    }
+    assert_eq!(
+        crate::luau_ext::vm_compilers_len(),
+        before,
+        "compiler map leaked entries after dropping states"
+    );
+}
+
+#[test]
+fn sandbox_saved_globals_do_not_pin_dropped_states() {
+    // Sandbox WITHOUT unsandboxing, then drop. Before the fix the saved-globals
+    // Table pinned the VM (state never closed); now it lives in the registry and
+    // is freed with the state, so the drop actually runs. We can't observe the
+    // (now absent) leak directly here, but this must not abort or hang.
+    for _ in 0..20 {
+        let lua = Lua::new();
+        lua.sandbox(true).unwrap();
+    }
+    // A sandbox round-trip on a fresh state still works after the refactor.
+    let lua = Lua::new();
+    lua.sandbox(true).unwrap();
+    lua.sandbox(false).unwrap();
+    lua.globals().set("x", 1).unwrap();
+    assert_eq!(lua.globals().get::<i64>("x").unwrap(), 1);
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn serde_sentinels_do_not_leak_or_pin_dropped_states() {
+    use crate::serde::LuaSerdeExt;
+    let before = crate::serde::sentinels_len();
+    for _ in 0..20 {
+        let lua = Lua::new();
+        // Touch the null + array-metatable sentinels, then drop the state.
+        let _ = lua.null();
+        let v: Value = lua.to_value(&vec![1, 2, 3]).unwrap();
+        let _back: Vec<i64> = lua.from_value(v).unwrap();
+    }
+    assert_eq!(
+        crate::serde::sentinels_len(),
+        before,
+        "serde sentinel map leaked entries after dropping states (the state was \
+         pinned by the cached Table handle, so LuaInner::drop never ran)"
+    );
+}
