@@ -7,6 +7,13 @@
 
 use arbitrary::Unstructured;
 
+/// Metadata-driven stdlib generator for the `api` target — a table of every
+/// covered builtin (call path + per-argument KIND) crossed with boundary-value
+/// pools, so the fuzzer systematically reaches the whole library surface with
+/// hostile arguments. See [`api_gen`].
+pub mod api_gen;
+pub use api_gen::generate_api_call;
+
 /// VM interrupt step budget for the run/splice/structured targets, read ONCE from
 /// `LUAUR_FUZZ_STEPS` (default 100_000). Measured: ~93% of those targets' wall
 /// time is the VM loop, and it's dominated by the ~2% of inputs that are infinite
@@ -25,6 +32,53 @@ pub fn vm_step_limit() -> u64 {
             .filter(|&n| n > 0)
             .unwrap_or(100_000)
     })
+}
+
+/// Native stack size (bytes) for [`run_on_big_stack`]. Overridable via
+/// `LUAUR_FUZZ_STACK_MB` (default 256 MiB). See that function for why.
+fn big_stack_bytes() -> usize {
+    use std::sync::OnceLock;
+    static MB: OnceLock<usize> = OnceLock::new();
+    *MB.get_or_init(|| {
+        std::env::var("LUAUR_FUZZ_STACK_MB")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(256)
+            * 1024
+            * 1024
+    })
+}
+
+/// Run `f` on a thread with a large native stack and wait for it.
+///
+/// luaur executes Lua-to-Lua calls via **native recursion**, so a legal but deep
+/// Lua recursion (e.g. the ~20 000-deep recursion in Luau's own `pcall.luau`
+/// conformance test) exhausts the default ~8 MiB thread stack and *aborts the
+/// process*. That abort is an uncatchable FALSE POSITIVE — it is not a
+/// memory-safety bug and not an upstream-Luau bug: the same program runs fine
+/// with adequate stack, which is exactly what the C++ conformance harness gives
+/// it. Any target that runs arbitrary or spliced programs wraps its VM work in
+/// this so only genuine crashes surface. A truly UNBOUNDED native recursion
+/// still overflows even the large stack (just deeper), so real infinite-recursion
+/// bugs remain caught — this raises the false-positive floor without lowering the
+/// true-positive ceiling.
+///
+/// `f` is `FnOnce + Send`: it must CREATE its `Lua`/`Rc` state inside the closure
+/// (those types are `!Send`) so nothing non-`Send` crosses the thread boundary —
+/// only the owned input bytes are captured.
+pub fn run_on_big_stack<F: FnOnce() + Send + 'static>(f: F) {
+    // A panic inside `f` is already reported+aborted by the installed AFL panic
+    // hook (process-global); join just reaps a normal return. If the OS can't
+    // give us the thread (effectively never), the input is dropped — `spawn`
+    // consumes `f`, so there's no inline fallback, and losing a rare input beats
+    // aborting.
+    if let Ok(handle) = std::thread::Builder::new()
+        .stack_size(big_stack_bytes())
+        .spawn(f)
+    {
+        let _ = handle.join();
+    }
 }
 
 /// Panic hook for the AFL compile-running targets. The compiler emulates C++
@@ -782,9 +836,42 @@ fn value_repr(v: &luaur_rt::Value) -> String {
     }
 }
 
+/// Compiler configuration for [`run_observed_cfg`]. The optimization level is the
+/// classic differential dimension; `debug`, `coverage`, and `type_info` levels
+/// are all supposed to be **behavior-preserving** (they add metadata /
+/// instrumentation, not semantics), so varying them must not change the observed
+/// output — that's what the flag-matrix oracle checks.
+#[derive(Clone, Copy)]
+pub struct ObserveCfg {
+    pub opt_level: u8,
+    pub debug_level: u8,
+    pub coverage_level: u8,
+    pub type_info_level: u8,
+}
+
+impl ObserveCfg {
+    /// The baseline used by the plain opt-level differential: opt `n`, debug 1,
+    /// no coverage, type-info 1 (a middle-of-the-road, always-valid combination).
+    pub fn opt(opt_level: u8) -> ObserveCfg {
+        ObserveCfg {
+            opt_level,
+            debug_level: 1,
+            coverage_level: 0,
+            type_info_level: 1,
+        }
+    }
+}
+
 /// Run `src` at the given compiler optimization level and return a deterministic
 /// observation, or `None` if inconclusive (didn't compile / hit the step limit).
 pub fn run_observed(src: &str, opt_level: u8) -> Option<String> {
+    run_observed_cfg(src, ObserveCfg::opt(opt_level))
+}
+
+/// Like [`run_observed`] but with full control over the compiler flag matrix
+/// (opt / debug / coverage / type-info levels) — the substrate for the flag
+/// invariance oracle in the `optdiff` target.
+pub fn run_observed_cfg(src: &str, cfg: ObserveCfg) -> Option<String> {
     use luaur_rt::{Compiler, Error, Lua, Result, Value, Variadic, VmState};
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -827,7 +914,11 @@ pub fn run_observed(src: &str, opt_level: u8) -> Option<String> {
         });
     }
 
-    let compiler = Compiler::new().set_optimization_level(opt_level);
+    let compiler = Compiler::new()
+        .set_optimization_level(cfg.opt_level)
+        .set_debug_level(cfg.debug_level)
+        .set_coverage_level(cfg.coverage_level)
+        .set_type_info_level(cfg.type_info_level);
     let func = lua
         .load(src)
         .set_name("fuzz")
@@ -942,13 +1033,47 @@ pub fn generate_computational(data: &[u8]) -> String {
         if u.is_empty() {
             break;
         }
-        if nvars > 0 && u.ratio(1u8, 3u8).unwrap_or(false) {
-            let i = u.int_in_range(0..=nvars - 1).unwrap_or(0);
-            out.push_str(&format!("print(v{i})\n"));
-        } else {
-            let e = comp_expr(&mut u, nvars, 4);
-            out.push_str(&format!("local v{nvars} = {e}\n"));
-            nvars += 1;
+        // Statement kind. The extra kinds beyond "print"/"local = expr" give the
+        // OPTIMIZER something to actually transform: a bounded numeric `for` loop
+        // (loop-unroll / const-fold / LOOP fastpaths) and a constant-key table
+        // read/write (GETTABLEKS/SETTABLEKS + array-part paths). Both stay fully
+        // DETERMINISTIC and finite (fixed small bounds, integer-key tables, no
+        // time/random) so the differential (optdiff) and metamorphic oracles keep
+        // a valid same-in-same-out invariant. Iteration bounds are tiny so a loop
+        // never approaches the run_observed step limit (which would go
+        // inconclusive and waste the input).
+        match u.int_in_range(0u8..=4).unwrap_or(0) {
+            0 if nvars > 0 => {
+                let i = u.int_in_range(0..=nvars - 1).unwrap_or(0);
+                out.push_str(&format!("print(v{i})\n"));
+            }
+            // A bounded loop that folds an expression into a fresh accumulator.
+            2 if nvars > 0 => {
+                let n = u.int_in_range(1..=8i64).unwrap_or(3);
+                let seed = comp_expr(&mut u, nvars, 2);
+                let step = comp_expr(&mut u, nvars, 2);
+                out.push_str(&format!(
+                    "local v{nvars} = {seed}\nfor _i = 1, {n} do v{nvars} = (v{nvars} + {step}) end\n"
+                ));
+                nvars += 1;
+            }
+            // A small constant-key table: build it, then read one key back into a
+            // fresh var so the value is observable.
+            3 => {
+                let a = comp_expr(&mut u, nvars, 2);
+                let b = comp_expr(&mut u, nvars, 2);
+                let c = comp_expr(&mut u, nvars, 2);
+                let k = u.int_in_range(1..=3i64).unwrap_or(1);
+                out.push_str(&format!(
+                    "local _t = {{ {a}, {b}, {c} }}\nlocal v{nvars} = _t[{k}]\n"
+                ));
+                nvars += 1;
+            }
+            _ => {
+                let e = comp_expr(&mut u, nvars, 4);
+                out.push_str(&format!("local v{nvars} = {e}\n"));
+                nvars += 1;
+            }
         }
     }
     // Print every variable at the end so the whole computed state is observable.
@@ -972,6 +1097,53 @@ pub fn metamorphic_noop(src: &str, tail: &[u8]) -> String {
             let n = NOOPS[u.int_in_range(0..=NOOPS.len() - 1).unwrap_or(0)];
             out.push_str(n);
             out.push('\n');
+        }
+        out.push_str(s);
+        out.push('\n');
+    }
+    out
+}
+
+/// Apply a DEAD-CODE metamorphic transform to `src`: before each top-level
+/// statement, sometimes inject a statement wrapped in a never-taken branch
+/// (`if false then <stmt> end`, `while false do <stmt> end`). The injected body
+/// is drawn from a REAL seed script (via [`generate_spliced`]-style slicing), so
+/// it's arbitrary-but-parseable code the optimizer must prove unreachable and
+/// eliminate. Because the branch condition is a literal `false`, the transform
+/// provably preserves observable behavior — so if the transformed program's
+/// captured output diverges, that's a dead-code-elimination / const-fold /
+/// jump-threading bug (the classic Equivalence-Modulo-Inputs signal). This
+/// complements [`metamorphic_noop`], which only inserts semantic no-ops: here
+/// the eliminated code is real, so it stresses the optimizer's reachability
+/// analysis rather than just statement interleaving.
+pub fn metamorphic_dead_branch(src: &str, tail: &[u8]) -> String {
+    let stmts = split_top_level_statements(src);
+    let mut u = Unstructured::new(tail);
+
+    // A pool of real, parseable statements to bury in dead branches. Falls back
+    // to a couple of literals if the embedded corpus is empty.
+    let pool: Vec<String> = if SPLICE_CORPUS.is_empty() {
+        vec!["error('dead')".to_string(), "return 42".to_string()]
+    } else {
+        let i = u.int_in_range(0..=SPLICE_CORPUS.len() - 1).unwrap_or(0);
+        let sliced = split_top_level_statements(SPLICE_CORPUS[i]);
+        if sliced.is_empty() {
+            vec!["error('dead')".to_string()]
+        } else {
+            sliced
+        }
+    };
+
+    let mut out = String::new();
+    for s in &stmts {
+        if u.ratio(1u8, 2u8).unwrap_or(false) {
+            let dead = &pool[u.int_in_range(0..=pool.len() - 1).unwrap_or(0)];
+            // Only a literal-`false` guard is guaranteed dead regardless of the
+            // buried statement's effects — keep it that way (never a variable).
+            match u.int_in_range(0u8..=1).unwrap_or(0) {
+                0 => out.push_str(&format!("if false then\n{dead}\nend\n")),
+                _ => out.push_str(&format!("while false do\n{dead}\nend\n")),
+            }
         }
         out.push_str(s);
         out.push('\n');

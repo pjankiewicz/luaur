@@ -17,7 +17,7 @@
 # Env: LUAUR_FUZZ_SEED overrides the PRNG seed (default 305419896).
 set -euo pipefail
 
-TARGETS="compile run typeck typeck_defs number structured determinism"
+TARGETS="compile run typeck typeck_defs number structured determinism api gcstress host serde_roundtrip"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 target="${1:-typeck}"

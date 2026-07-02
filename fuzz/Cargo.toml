@@ -23,11 +23,18 @@ edition = "2021"
 [dependencies]
 arbitrary = { version = "1", features = ["derive"] }
 afl = { version = "0.18", optional = true }
-luaur-rt = { path = "../crates/luaur-rt", features = ["typecheck"] }
+# `serde` feature: the `serde_roundtrip` target exercises luaur-rt's serde bridge
+# (to_value / from_value). Always on — additive, so the other targets are
+# unaffected; keeping it unconditional means `--no-default-features` builds
+# (CI/wasm) still get it without a second feature flag.
+luaur-rt = { path = "../crates/luaur-rt", features = ["typecheck", "serde"] }
 luaur-ast = { path = "../crates/luaur-ast" }
 # For `install_afl_panic_hook`: detect the compiler's intentional `CompileError`
 # throw (panic_any, caught by compile()) so AFL doesn't treat it as a crash.
 luaur-compiler = { path = "../crates/luaur-compiler" }
+# For the `serde_roundtrip` target's value model (`#[derive(Serialize,
+# Deserialize)]`).
+serde = { version = "1", features = ["derive"] }
 
 [features]
 # `afl-runtime` (default) links the AFL fork-server runtime via `cargo afl build`
@@ -136,6 +143,34 @@ bench = false
 [[bin]]
 name = "spans"
 path = "fuzz_targets/spans.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "api"
+path = "fuzz_targets/api.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gcstress"
+path = "fuzz_targets/gcstress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "host"
+path = "fuzz_targets/host.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "serde_roundtrip"
+path = "fuzz_targets/serde_roundtrip.rs"
 test = false
 doc = false
 bench = false
