@@ -73,13 +73,25 @@ impl LuaInner {
 impl Drop for LuaInner {
     fn drop(&mut self) {
         if self.owned && !self.state.is_null() {
-            // Drop this VM's application-data store before closing the state
-            // (it is keyed by the global-state pointer, still valid here).
+            // Evict every per-VM thread-local entry keyed by this state before
+            // closing it, so none of them leaks one slot per state created. All
+            // are keyed by the still-valid state/global pointer here. (The serde
+            // sentinels + the sandbox saved-globals live in the state's REGISTRY,
+            // freed by `lua_close` below; here we only drop their pointer/flag
+            // bookkeeping.) These maps hold no Lua handles, so the state actually
+            // reaches this Drop — that is the whole point of not caching handles.
             crate::app_data::clear_app_data(self.state);
-            // Likewise drop this VM's async-state entry (waker + implicit-thread
-            // ownership map), also keyed by the still-valid global-state pointer.
             #[cfg(feature = "async")]
             crate::async_support::clear_async_state(self.state);
+            #[cfg(feature = "serde")]
+            crate::serde::clear_sentinels(self.state);
+            crate::interrupt::clear_interrupt(self.state);
+            crate::luau_ext::clear_vm_state(self.state);
+            // The memory map is keyed by the global-state pointer and must be
+            // dropped AFTER `lua_close` (the allocator `MemoryControl` handed to
+            // the VM as `ud` is used throughout close to free every object), so
+            // capture the key now, while the state is still valid.
+            let mem_key = unsafe { crate::memory::memory_key(self.state) };
             unsafe {
                 // Reset the active memory category to 0 ("main") before closing.
                 // `Lua::set_memory_category` may have left a non-main category
@@ -89,6 +101,8 @@ impl Drop for LuaInner {
                 crate::sys::lua_setmemcat(self.state, 0);
                 lua_close(self.state)
             }
+            // Now the allocator is no longer needed: drop its control block.
+            crate::memory::clear_memory(mem_key);
         }
     }
 }
