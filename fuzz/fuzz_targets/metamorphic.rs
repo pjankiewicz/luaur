@@ -15,20 +15,36 @@ use afl::fuzz_nohook;
 include!("standalone.rs");
 
 fn exercise_input(data: &[u8]) {
-    // First half drives the program; second half drives the no-op insertions, so
-    // AFL can vary the transform independently of the program.
+    // First half drives the program; second half drives the transforms, so AFL
+    // can vary the transform independently of the program.
     let mid = data.len() / 2;
     let src = luaur_fuzz::generate_computational(&data[..mid]);
-    let transformed = luaur_fuzz::metamorphic_noop(&src, &data[mid..]);
+    let tail = &data[mid..];
 
-    // Same opt level for both — we're isolating the transform, not the optimizer.
+    // Two behavior-preserving transforms, each a distinct oracle:
+    //   * no-op insertion — statement interleaving / scoping / lowering.
+    //   * dead-branch insertion — buries REAL (but unreachable) code in
+    //     `if false` / `while false`, which the optimizer must prove dead and
+    //     eliminate. A divergence here is a dead-code-elimination / const-fold /
+    //     jump-threading bug (the classic Equivalence-Modulo-Inputs signal).
+    let noop = luaur_fuzz::metamorphic_noop(&src, tail);
+    let dead = luaur_fuzz::metamorphic_dead_branch(&src, tail);
+
+    // Same opt level for all — we're isolating the transform, not the optimizer.
     let a = luaur_fuzz::run_observed(&src, 1);
-    let b = luaur_fuzz::run_observed(&transformed, 1);
+    let b = luaur_fuzz::run_observed(&noop, 1);
+    let c = luaur_fuzz::run_observed(&dead, 1);
 
-    if let (Some(a), Some(b)) = (a, b) {
+    if let (Some(a), Some(b)) = (a.clone(), b) {
         assert!(
             a == b,
-            "behavior-preserving transform changed behavior:\n  original  = {a}\n  transformed = {b}\n--- original ---\n{src}\n--- transformed ---\n{transformed}"
+            "no-op transform changed behavior:\n  original  = {a}\n  transformed = {b}\n--- original ---\n{src}\n--- transformed ---\n{noop}"
+        );
+    }
+    if let (Some(a), Some(c)) = (a, c) {
+        assert!(
+            a == c,
+            "dead-branch transform changed behavior:\n  original  = {a}\n  transformed = {c}\n--- original ---\n{src}\n--- transformed ---\n{dead}"
         );
     }
 }

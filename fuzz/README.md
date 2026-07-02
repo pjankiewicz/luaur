@@ -26,6 +26,15 @@ This crate is **detached from the main workspace** (its own `[workspace]`) and i
 | `structured`  | `proto.cpp`                 | grammar-generated **valid** Luau → compile + run + check |
 | `typeck_defs` | —                           | `check_with_definitions` hammered in-process (issue #6 shape) |
 | `determinism` | —                           | metamorphic oracle: same source → identical result    |
+| `roundtrip`   | —                           | pretty-printer idempotence: `format(format(x)) == format(x)` |
+| `splice`      | —                           | statement-level mutation of real conformance scripts  |
+| `optdiff`     | —                           | differential: `-O0/-O1/-O2` **and** debug/coverage/type-info levels preserve behavior |
+| `metamorphic` | —                           | behavior-preserving transforms (no-op + dead-branch EMI) don't change output |
+| `spans`       | —                           | diagnostic spans are in-range 1-based; no ICE leak in messages |
+| `api`         | —                           | metadata-driven: ~140 stdlib builtins × boundary-value pools (INT_MIN/MAX, 2^53, NaN, inf, out-of-range offsets) + fuzzer-driven string/number leaves |
+| `gcstress`    | —                           | aggressive incremental-GC cadence over alloc-heavy programs |
+| `host`        | —                           | Rust↔Lua embedding boundary: `create_function` callbacks, `UserData`, the registry |
+| `serde_roundtrip` | —                       | `to_value`→`from_value` identity over an externally-tagged value model |
 
 ## The oracle
 
@@ -34,6 +43,16 @@ or exhibits UB** on any input — it must always return `Ok` or a structured `Er
 VM execution is bounded by an interrupt step-limit so a generated infinite loop
 cannot hang the fuzzer. `determinism` additionally asserts that the same input
 always produces the same result.
+
+**Deep recursion / native stack.** luaur runs Lua-to-Lua calls via native
+recursion, so a *legal* but deep recursion (e.g. the ~20 000-deep recursion in
+Luau's own `pcall.luau` conformance test) exhausts the default ~8 MiB thread
+stack and aborts — a false positive, not a memory-safety bug (the same program
+runs fine with adequate stack, which is what the C++ conformance harness gives
+it). The VM-running targets that see arbitrary/spliced programs (`api`,
+`gcstress`, `host`) therefore run each input on a large-stack thread
+(`LUAUR_FUZZ_STACK_MB`, default 256). A genuinely unbounded recursion still
+overflows even that, so real infinite-recursion bugs remain caught.
 
 ## AFL mode (the real-time TUI)
 

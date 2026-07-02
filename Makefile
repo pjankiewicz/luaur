@@ -5,7 +5,7 @@
 #   make fuzz-typeck SECS=300      # ...or stop this target after 300s
 #   make fuzz-all SECS=300         # cycle ALL targets, 300s each
 #   make fuzz-loop SECS=300        # cycle ALL targets, 300s each, FOREVER (Ctrl+C)
-#   make fuzz-<target>             # AFL TUI for any of the 7 targets
+#   make fuzz-<target>             # AFL TUI for any target (see the list below)
 #   LUAUR_FUZZ_ASAN=1 make fuzz-typeck   # AFL + AddressSanitizer build
 #   make fuzz-triage-<target>      # minimize + bucket AFL crashes
 #   make fuzz-standalone           # NO toolchain: deterministic cargo/CI fuzz
@@ -24,13 +24,20 @@
 #   capping ~quadruples typeck check throughput at near-zero coverage cost.
 #     FUZZ_MAXLEN=4096 make fuzz-typeck   # tighter (~6x), FUZZ_MAXLEN=0 disables
 #
-# Targets (bug-priority order): run typeck_typed typeck determinism compile structured splice optdiff metamorphic roundtrip spans number typeck_defs
+# Targets (bug-priority order): run typeck_typed typeck determinism compile structured splice optdiff metamorphic roundtrip spans number typeck_defs api gcstress host serde_roundtrip
+#
+#   Runtime/host/GC/serde targets:
+#     make fuzz-api               # stdlib builtins + metamethods (string.pack/patterns/buffer/sort)
+#     make fuzz-gcstress          # aggressive GC cadence over alloc-heavy programs
+#     make fuzz-host              # Rust<->Lua embedding boundary (callbacks/userdata/registry)
+#     make fuzz-serde_roundtrip   # serde to_value/from_value round-trip identity
+#   Their toolchain-free smoke mode: make fuzz-standalone-api (etc.)
 
 .PHONY: setup-afl fuzz-all fuzz-loop build-wasm fuzz-wasm corpus fetch-corpus gen-corpus \
-	fuzz-compile fuzz-run fuzz-typeck fuzz-typeck_typed fuzz-number fuzz-structured fuzz-typeck_defs fuzz-determinism fuzz-roundtrip fuzz-splice fuzz-optdiff fuzz-metamorphic fuzz-spans \
-	fuzz-triage-compile fuzz-triage-run fuzz-triage-typeck fuzz-triage-typeck_typed fuzz-triage-number fuzz-triage-structured fuzz-triage-typeck_defs fuzz-triage-determinism fuzz-triage-roundtrip fuzz-triage-splice fuzz-triage-optdiff fuzz-triage-metamorphic fuzz-triage-spans \
+	fuzz-compile fuzz-run fuzz-typeck fuzz-typeck_typed fuzz-number fuzz-structured fuzz-typeck_defs fuzz-determinism fuzz-roundtrip fuzz-splice fuzz-optdiff fuzz-metamorphic fuzz-spans fuzz-api fuzz-gcstress fuzz-host fuzz-serde_roundtrip \
+	fuzz-triage-compile fuzz-triage-run fuzz-triage-typeck fuzz-triage-typeck_typed fuzz-triage-number fuzz-triage-structured fuzz-triage-typeck_defs fuzz-triage-determinism fuzz-triage-roundtrip fuzz-triage-splice fuzz-triage-optdiff fuzz-triage-metamorphic fuzz-triage-spans fuzz-triage-api fuzz-triage-gcstress fuzz-triage-host fuzz-triage-serde_roundtrip \
 	fuzz-standalone \
-	fuzz-standalone-compile fuzz-standalone-run fuzz-standalone-typeck fuzz-standalone-typeck_typed fuzz-standalone-number fuzz-standalone-structured fuzz-standalone-typeck_defs fuzz-standalone-determinism fuzz-standalone-roundtrip fuzz-standalone-splice fuzz-standalone-optdiff fuzz-standalone-metamorphic fuzz-standalone-spans
+	fuzz-standalone-compile fuzz-standalone-run fuzz-standalone-typeck fuzz-standalone-typeck_typed fuzz-standalone-number fuzz-standalone-structured fuzz-standalone-typeck_defs fuzz-standalone-determinism fuzz-standalone-roundtrip fuzz-standalone-splice fuzz-standalone-optdiff fuzz-standalone-metamorphic fuzz-standalone-spans fuzz-standalone-api fuzz-standalone-gcstress fuzz-standalone-host fuzz-standalone-serde_roundtrip
 
 # ---------------------------------------------------------------------------
 # AFL mode (real fuzzing; needs the AFL toolchain + nightly-free cargo-afl).
@@ -87,13 +94,23 @@ fuzz-metamorphic:
 	cd fuzz && TARGET=metamorphic FUZZ_SECS=$(SECS) ./scripts/run_afl.sh
 fuzz-spans:
 	cd fuzz && TARGET=spans FUZZ_SECS=$(SECS) ./scripts/run_afl.sh
+fuzz-api:
+	cd fuzz && TARGET=api FUZZ_SECS=$(SECS) ./scripts/run_afl.sh
+fuzz-gcstress:
+	cd fuzz && TARGET=gcstress FUZZ_SECS=$(SECS) ./scripts/run_afl.sh
+fuzz-host:
+	cd fuzz && TARGET=host FUZZ_SECS=$(SECS) ./scripts/run_afl.sh
+fuzz-serde_roundtrip:
+	cd fuzz && TARGET=serde_roundtrip FUZZ_SECS=$(SECS) ./scripts/run_afl.sh
 
 # The full list of fuzz targets (shared by fuzz-all / fuzz-loop), ORDERED BY
 # bugs found so far: run (os.time + adjustasize overflow + a verified upstream
 # UBSan int-overflow), typeck_typed (getMutable type-alias), typeck
 # (PromoteTypeLevels getMutable), determinism (the HashSet non-determinism) lead;
-# the rest follow. fuzz-all does a single pass, so the proven finders go first.
-FUZZ_TARGETS := run typeck_typed typeck determinism compile structured splice optdiff metamorphic roundtrip spans number typeck_defs
+# the rest follow. The runtime/host/GC/serde targets (api gcstress host
+# serde_roundtrip) are new — appended after the proven finders. fuzz-all does a
+# single pass, so the proven finders go first.
+FUZZ_TARGETS := run typeck_typed typeck determinism compile structured splice optdiff metamorphic roundtrip spans number typeck_defs api gcstress host serde_roundtrip
 
 # Cycle every target through AFL once, giving each a time slice (default 300s — a
 # bare `make fuzz-all` would otherwise sit on the first target forever).
@@ -152,6 +169,14 @@ fuzz-triage-metamorphic:
 	cd fuzz && TARGET=metamorphic ./scripts/triage_afl_crashes.sh
 fuzz-triage-spans:
 	cd fuzz && TARGET=spans ./scripts/triage_afl_crashes.sh
+fuzz-triage-api:
+	cd fuzz && TARGET=api ./scripts/triage_afl_crashes.sh
+fuzz-triage-gcstress:
+	cd fuzz && TARGET=gcstress ./scripts/triage_afl_crashes.sh
+fuzz-triage-host:
+	cd fuzz && TARGET=host ./scripts/triage_afl_crashes.sh
+fuzz-triage-serde_roundtrip:
+	cd fuzz && TARGET=serde_roundtrip ./scripts/triage_afl_crashes.sh
 
 # ---------------------------------------------------------------------------
 # Standalone mode — NO AFL / nightly / sanitizer toolchain required. Builds the
@@ -202,9 +227,21 @@ fuzz-standalone-metamorphic:
 fuzz-standalone-spans:
 	cd fuzz && cargo build --no-default-features --bin spans
 	cd fuzz && LUAUR_FUZZ_ITERS=$(ITERS) LUAUR_FUZZ_SEED=$(SEED) ./target/debug/spans
+fuzz-standalone-api:
+	cd fuzz && cargo build --no-default-features --bin api
+	cd fuzz && LUAUR_FUZZ_ITERS=$(ITERS) LUAUR_FUZZ_SEED=$(SEED) ./target/debug/api
+fuzz-standalone-gcstress:
+	cd fuzz && cargo build --no-default-features --bin gcstress
+	cd fuzz && LUAUR_FUZZ_ITERS=$(ITERS) LUAUR_FUZZ_SEED=$(SEED) ./target/debug/gcstress
+fuzz-standalone-host:
+	cd fuzz && cargo build --no-default-features --bin host
+	cd fuzz && LUAUR_FUZZ_ITERS=$(ITERS) LUAUR_FUZZ_SEED=$(SEED) ./target/debug/host
+fuzz-standalone-serde_roundtrip:
+	cd fuzz && cargo build --no-default-features --bin serde_roundtrip
+	cd fuzz && LUAUR_FUZZ_ITERS=$(ITERS) LUAUR_FUZZ_SEED=$(SEED) ./target/debug/serde_roundtrip
 
 # Run every target's standalone smoke fuzz.
-fuzz-standalone: fuzz-standalone-compile fuzz-standalone-run fuzz-standalone-typeck fuzz-standalone-typeck_typed fuzz-standalone-number fuzz-standalone-structured fuzz-standalone-typeck_defs fuzz-standalone-determinism fuzz-standalone-roundtrip fuzz-standalone-splice fuzz-standalone-optdiff fuzz-standalone-metamorphic fuzz-standalone-spans
+fuzz-standalone: fuzz-standalone-compile fuzz-standalone-run fuzz-standalone-typeck fuzz-standalone-typeck_typed fuzz-standalone-number fuzz-standalone-structured fuzz-standalone-typeck_defs fuzz-standalone-determinism fuzz-standalone-roundtrip fuzz-standalone-splice fuzz-standalone-optdiff fuzz-standalone-metamorphic fuzz-standalone-spans fuzz-standalone-api fuzz-standalone-gcstress fuzz-standalone-host fuzz-standalone-serde_roundtrip
 
 # ---------------------------------------------------------------------------
 # wasm fuzzing — replay the (native-AFL-evolved) corpus through the wasm32-wasip1

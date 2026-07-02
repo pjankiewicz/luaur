@@ -29,6 +29,49 @@ fn exercise_input(data: &[u8]) {
             "optimization changed observable behavior:\n  O0 = {a}\n  O1 = {b}\n  O2 = {c}\n--- program ---\n{src}"
         );
     }
+
+    // --- Flag-matrix invariance --------------------------------------------
+    // The debug / coverage / type-info compiler levels add metadata and
+    // instrumentation; they must NOT change observable behavior. At a fixed opt
+    // level, a baseline observation must equal the same program compiled with a
+    // bumped debug level, a bumped coverage level, and a bumped type-info level.
+    // Coverage instrumentation altering results is a real, embarrassing class of
+    // bug this catches. (The first byte varies the fixed opt level so the matrix
+    // is checked across O0/O1/O2 over the corpus, not just one level.)
+    use luaur_fuzz::ObserveCfg;
+    let opt = data.first().copied().unwrap_or(1) % 3;
+    let base = ObserveCfg::opt(opt);
+    let baseline = luaur_fuzz::run_observed_cfg(&src, base);
+    let with_debug = luaur_fuzz::run_observed_cfg(
+        &src,
+        ObserveCfg {
+            debug_level: 2,
+            ..base
+        },
+    );
+    let with_cov = luaur_fuzz::run_observed_cfg(
+        &src,
+        ObserveCfg {
+            coverage_level: 2,
+            ..base
+        },
+    );
+    let with_ti = luaur_fuzz::run_observed_cfg(
+        &src,
+        ObserveCfg {
+            type_info_level: 2,
+            ..base
+        },
+    );
+
+    if let (Some(b), Some(d), Some(c), Some(t)) = (baseline, with_debug, with_cov, with_ti) {
+        assert!(
+            b == d && b == c && b == t,
+            "a behavior-preserving compiler flag changed observable behavior (opt={opt}):\n  \
+             baseline    = {b}\n  debug=2     = {d}\n  coverage=2  = {c}\n  typeinfo=2  = {t}\n\
+             --- program ---\n{src}"
+        );
+    }
 }
 
 fn main() {

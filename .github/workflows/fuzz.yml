@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [compile, run, typeck, typeck_defs, number, structured, determinism]
+        target: [compile, run, typeck, typeck_defs, number, structured, determinism, api, gcstress, host, serde_roundtrip]
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust

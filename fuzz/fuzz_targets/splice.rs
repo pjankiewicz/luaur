@@ -26,10 +26,23 @@ thread_local! {
 fn exercise_input(data: &[u8]) {
     let src = luaur_fuzz::generate_spliced(data);
 
+    // Type-check on THIS thread so the reusable thread-local CHECKER stays
+    // amortized (a thread-local is per-thread; running it on a fresh spawned
+    // thread would rebuild the frontend every input). The checker recurses on AST
+    // depth — shallow for spliced programs — so it doesn't need the big stack.
     CHECKER.with(|c| {
         let _ = c.borrow_mut().check(&src);
     });
 
+    // Run the (spliced REAL) program on a large native stack: it can recurse ~20k
+    // deep (e.g. spliced `pcall.luau`), and luaur recurses natively per Lua call,
+    // so the default stack would abort — a false positive, not a bug. See
+    // `luaur_fuzz::run_on_big_stack`. The VM state is created INSIDE the thread
+    // (Lua/Rc are !Send); only the owned source crosses the boundary.
+    luaur_fuzz::run_on_big_stack(move || run_program(&src));
+}
+
+fn run_program(src: &str) {
     let lua = Lua::new();
     let steps = Rc::new(Cell::new(0u64));
     let counter = steps.clone();
@@ -44,7 +57,7 @@ fn exercise_input(data: &[u8]) {
         }
     });
 
-    if let Ok(f) = lua.load(&src).set_name("fuzz").into_function() {
+    if let Ok(f) = lua.load(src).set_name("fuzz").into_function() {
         let _ = f.call::<()>(());
     }
 }
