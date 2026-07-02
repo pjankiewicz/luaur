@@ -16,8 +16,13 @@ impl Compiler {
             {
                 let cint = rtti::ast_node_as::<AstExprConstantInteger>(expr_ref.expr as *mut _);
                 if !cint.is_null() {
-                    let cid =
-                        (*self.bytecode).add_constant_integer((!((*cint).value as u64) + 1) as i64);
+                    // Two's-complement negation `~v + 1 == -v`. The `+ 1` MUST
+                    // wrap (C semantics): for v == 0 it wraps `u64::MAX -> 0`, and
+                    // for v == i64::MIN it wraps back to i64::MIN — both correct.
+                    // A checked `+` panics on those under the fuzz build's
+                    // overflow-checks (found by the compile fuzzer on `-<int 0>`).
+                    let cid = (*self.bytecode)
+                        .add_constant_integer((!((*cint).value as u64)).wrapping_add(1) as i64);
                     if cid < 0 {
                         CompileError::raise(
                             &expr_ref.base.base.location,

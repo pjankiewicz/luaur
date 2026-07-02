@@ -414,3 +414,20 @@ fn callback_receives_many_reference_args() {
     let n: i64 = lua.load(&src).eval().unwrap();
     assert_eq!(n, 30);
 }
+
+// Compiling unary minus on an integer literal must not overflow-panic. The
+// compiler negates an integer constant via two's complement (`~v + 1`), which
+// MUST wrap: `-0i` gives `~0 + 1 == 0`, and `-<i64::MIN>i` wraps back to i64::MIN
+// — a checked `+ 1` panicked on both under overflow-checks. Found by the compile
+// fuzzer; C++ Luau compiles these cleanly.
+#[test]
+fn negate_integer_literal_zero_does_not_overflow() {
+    let lua = Lua::new();
+    // `-0i`: the compiler negates the integer constant via `~0 + 1`, which must
+    // WRAP to 0; a checked `+ 1` panicked here under overflow-checks (found by the
+    // compile fuzzer). C++ Luau compiles it cleanly.
+    assert!(lua.load("return -0i").into_function().is_ok());
+    // Sanity: other integer-literal negations still compile.
+    assert!(lua.load("return -1i").into_function().is_ok());
+    assert!(lua.load("return 0i").into_function().is_ok());
+}
