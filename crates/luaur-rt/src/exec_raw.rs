@@ -120,6 +120,17 @@ impl Lua {
             if status != 0 {
                 return Err(self.pop_error(status));
             }
+            // `value_from_stack` duplicates each reference-typed result onto the
+            // stack before popping it; after a LUA_MULTRET call the results can
+            // fill the C frame exactly to `ci->top`, so reserve headroom or that
+            // push overruns (the `lua_pushvalue` api_incr_top assert). Same class
+            // as the fix in `function.rs::call`.
+            if lua_checkstack(state, 2) == 0 {
+                lua_settop(state, base);
+                return Err(crate::error::Error::RuntimeError(
+                    "stack overflow: too many return values".to_string(),
+                ));
+            }
             // Collect results left above `base`.
             let top = lua_gettop(state);
             let nresults = top - base;

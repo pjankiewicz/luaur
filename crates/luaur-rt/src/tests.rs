@@ -370,3 +370,47 @@ fn serde_sentinels_do_not_leak_or_pin_dropped_states() {
          pinned by the cached Table handle, so LuaInner::drop never ran)"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Multi-value collection must reserve stack headroom. `value_from_stack`
+// duplicates each reference-typed value onto the stack (lua_pushvalue) before
+// popping it into a registry ref; after a LUA_MULTRET call, ~LUA_MINSTACK
+// results fill the C frame exactly to `ci->top`, so the duplicating push
+// overruns the frame (api_incr_top assert in lua_pushvalue) unless the
+// collection loop reserves headroom first. Found by the `run` fuzzer:
+// `local t={a=1}; return <~20 values including t>`. C++ Luau is unaffected (it
+// has no such Rust result-collection wrapper).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn function_call_collects_many_reference_returns() {
+    let lua = Lua::new();
+    // 25 reference-typed return values (the same table), above the ~20 threshold.
+    let src = format!("local a = {{}}\nreturn {}", vec!["a"; 25].join(","));
+    let f = lua.load(&src).into_function().unwrap();
+    let r: Variadic<Value> = f.call(()).unwrap();
+    assert_eq!(r.len(), 25, "all 25 reference results must be collected");
+}
+
+#[test]
+fn chunk_eval_collects_many_reference_returns() {
+    let lua = Lua::new();
+    let src = format!("local a = {{}}\nreturn {}", vec!["a"; 25].join(","));
+    let r: Variadic<Value> = lua.load(&src).eval().unwrap();
+    assert_eq!(r.len(), 25);
+}
+
+#[test]
+fn callback_receives_many_reference_args() {
+    // A C-function frame is guaranteed LUA_MINSTACK headroom above its args, so
+    // collect_args' duplicating reads are safe even for many reference args —
+    // this asserts that (a regression guard for the convention).
+    let lua = Lua::new();
+    let f = lua
+        .create_function(|_, args: Variadic<Value>| Ok(args.len() as i64))
+        .unwrap();
+    lua.globals().set("count", f).unwrap();
+    let src = format!("local a = {{}}\nreturn count({})", vec!["a"; 30].join(","));
+    let n: i64 = lua.load(&src).eval().unwrap();
+    assert_eq!(n, 30);
+}

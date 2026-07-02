@@ -65,6 +65,20 @@ impl Function {
             if status != 0 {
                 return Err(lua.pop_error(status));
             }
+            // The result-collection loop below reads each reference-typed result
+            // via `value_from_stack`, which DUPLICATES it onto the stack
+            // (`lua_pushvalue`) before popping it into a registry ref. After a
+            // LUA_MULTRET call the results can fill the C frame's stack exactly to
+            // `ci->top` (LUA_MINSTACK), so that duplicating push would overrun the
+            // frame — the `api_incr_top` assert in `lua_pushvalue`. Reserve a slot
+            // of headroom for it. (Found by the `run` fuzzer:
+            // `local t={a=1}; return <~20 values including t>`.)
+            if lua_checkstack(state, 2) == 0 {
+                lua_settop(state, base);
+                return Err(crate::error::Error::RuntimeError(
+                    "stack overflow: too many return values".to_string(),
+                ));
+            }
             // Collect every value pushed above `base` as the results.
             let top = lua_gettop(state);
             let nresults = top - base;

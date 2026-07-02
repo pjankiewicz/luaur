@@ -660,6 +660,11 @@ impl Lua {
                         let state = lua.state();
                         let result = unsafe {
                             let top = lua_gettop(state);
+                            // `value_from_stack` duplicates each reference result
+                            // onto the stack before popping it; reserve headroom so
+                            // a full stack doesn't overrun (same class as the
+                            // `function.rs::call` fix).
+                            let _ = lua_checkstack(state, 2);
                             let mut results = MultiValue::with_capacity((top.max(1) - 1) as usize);
                             let mut err = None;
                             for i in 2..=top {
