@@ -1,4 +1,3 @@
-pub mod add_int_64_format;
 pub mod add_s;
 pub mod add_value;
 pub mod addfield;
@@ -135,6 +134,7 @@ pub mod findindex;
 pub mod finish_gc_cycle_metrics;
 pub mod foreach;
 pub mod foreachi;
+pub mod format_directive;
 pub mod freeblock;
 pub mod freeclasspage;
 pub mod freegcoblock;

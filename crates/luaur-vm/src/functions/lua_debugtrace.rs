@@ -8,6 +8,15 @@ use crate::type_aliases::lua_state::lua_State;
 
 static mut BUF: [core::ffi::c_char; 4096] = [0; 4096];
 
+/// Write `s` into `buf` as a NUL-terminated C string, truncating if needed
+/// (the pure-Rust stand-in for the original `snprintf` calls, which have no
+/// symbol to bind on `wasm32-unknown-unknown` and trapped in the browser).
+unsafe fn write_c_str(buf: &mut [core::ffi::c_char], s: &str) {
+    let n = s.len().min(buf.len() - 1);
+    core::ptr::copy_nonoverlapping(s.as_ptr() as *const core::ffi::c_char, buf.as_mut_ptr(), n);
+    buf[n] = 0;
+}
+
 #[allow(non_snake_case)]
 pub unsafe fn lua_debugtrace(L: *mut lua_State) -> *const core::ffi::c_char {
     const LIMIT1: core::ffi::c_int = 10;
@@ -18,15 +27,6 @@ pub unsafe fn lua_debugtrace(L: *mut lua_State) -> *const core::ffi::c_char {
 
     let mut ar: LuaDebug = core::mem::zeroed();
 
-    extern "C" {
-        fn snprintf(
-            s: *mut core::ffi::c_char,
-            n: usize,
-            format: *const core::ffi::c_char,
-            ...
-        ) -> core::ffi::c_int;
-    }
-
     let mut level: core::ffi::c_int = 0;
     while lua_getinfo(L, level, c"sln".as_ptr(), &mut ar as *mut LuaDebug) != 0 {
         if !ar.short_src.is_null() {
@@ -35,12 +35,7 @@ pub unsafe fn lua_debugtrace(L: *mut lua_State) -> *const core::ffi::c_char {
 
         if ar.currentline > 0 {
             let mut line: [core::ffi::c_char; 32] = [0; 32];
-            snprintf(
-                line.as_mut_ptr(),
-                line.len(),
-                c":%d".as_ptr(),
-                ar.currentline,
-            );
+            write_c_str(&mut line, &alloc::format!(":{}", ar.currentline));
 
             offset = append(BUF.as_mut_ptr(), BUF.len(), offset, line.as_ptr());
         }
@@ -54,11 +49,9 @@ pub unsafe fn lua_debugtrace(L: *mut lua_State) -> *const core::ffi::c_char {
 
         if depth > LIMIT1 + LIMIT2 && level == LIMIT1 - 1 {
             let mut skip: [core::ffi::c_char; 32] = [0; 32];
-            snprintf(
-                skip.as_mut_ptr(),
-                skip.len(),
-                c"... (+%d frames)\n".as_ptr(),
-                depth - LIMIT1 - LIMIT2,
+            write_c_str(
+                &mut skip,
+                &alloc::format!("... (+{} frames)\n", depth - LIMIT1 - LIMIT2),
             );
 
             offset = append(BUF.as_mut_ptr(), BUF.len(), offset, skip.as_ptr());
