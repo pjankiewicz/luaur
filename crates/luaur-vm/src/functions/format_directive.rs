@@ -19,7 +19,15 @@
 //! - the C-undefined corners are resolved the way glibc/musl resolve them:
 //!   `+`/space are ignored for the unsigned conversions, `0` padding is
 //!   ignored for `%c`/`%s`, and `0` is ignored whenever `-` is present or an
-//!   integer precision is given.
+//!   integer precision is given;
+//! - one glibc quirk is deliberately not reproduced: when `%#g` rounding at
+//!   P significant digits carries into the next decade (999999.5 at P = 6
+//!   becomes 1e+06), glibc drops the trailing zeros the `#` flag requires it
+//!   to keep and prints `1.e+06` (observed on glibc 2.36). C99 7.19.6.1 and
+//!   macOS/BSD produce `1.00000e+06`, and so does this formatter on every
+//!   target. A full 17,600-row sweep against glibc found this one class (128
+//!   rows, all `#` + `g`/`G` + decade-crossing values) as the only
+//!   divergence.
 
 use alloc::format;
 use alloc::string::String;
@@ -470,6 +478,27 @@ mod tests {
         assert_eq!(float(".17", b'g', 0.1), "0.10000000000000001");
     }
 
+    /// The wider decade-crossing-carry class around the `%#g` pins above:
+    /// glibc drops the C99-mandated trailing zeros exactly when `%g` rounding
+    /// at P significant digits carries into the next decade, so those rows
+    /// are skipped in the C oracle (see `carry_crosses_decade`) and pinned
+    /// here instead — non-tie carries, other precisions, padding/width
+    /// interactions, the `%e` neighbour, and the non-carrying `#g`
+    /// neighbours that stay oracle-checked.
+    #[test]
+    fn alt_g_decade_crossing_carry_keeps_zeros() {
+        assert_eq!(float("#", b'g', 999999.9), "1.00000e+06"); // carry, no tie
+        assert_eq!(float("#.6", b'g', -999999.5), "-1.00000e+06");
+        assert_eq!(float("#.3", b'g', 999.5), "1.00e+03");
+        assert_eq!(float("#020", b'g', 999999.5), "0000000001.00000e+06");
+        assert_eq!(float("-#20", b'g', 999999.5), "1.00000e+06         ");
+        // The same carry in %e keeps its zeros on glibc too (oracle-checked).
+        assert_eq!(float(".5", b'e', 999999.5), "1.00000e+06");
+        // Non-carrying `#g` neighbours stay oracle-checked and unchanged.
+        assert_eq!(float("#", b'g', 999999.4), "999999.");
+        assert_eq!(float("#", b'g', 0.5), "0.500000");
+    }
+
     #[test]
     fn nonfinite_floats() {
         assert_eq!(float("", b'f', f64::INFINITY), "inf");
@@ -577,6 +606,23 @@ mod tests {
             }
         }
 
+        /// Does rounding `a` to `p` significant digits carry into the next
+        /// decade (999999.5 at p == 6 becomes 1e+06)? glibc's `%#g` drops the
+        /// C99-mandated trailing zeros exactly in this case, so the oracle
+        /// skips the `#` + `g`/`G` combination for such values. A 17,600-row
+        /// sweep against glibc 2.36 showed this class (128 rows) to be the
+        /// only libc divergence in the matrix.
+        fn carry_crosses_decade(a: f64, p: usize) -> bool {
+            if !a.is_finite() || a == 0.0 {
+                return false;
+            }
+            fn dec_exp(a: f64, prec: usize) -> i32 {
+                let s = format!("{:.*e}", prec, a);
+                s.split_once('e').unwrap().1.parse().unwrap()
+            }
+            dec_exp(a, p - 1) != dec_exp(a, 60)
+        }
+
         #[test]
         fn floats_match_snprintf() {
             let values: [f64; 16] = [
@@ -598,20 +644,31 @@ mod tests {
                 5e-324,
             ];
             for conv in ['e', 'E', 'f', 'g', 'G'] {
-                // glibc strips the trailing zeros `#` is supposed to keep
-                // (C99 7.19.6.1) from `%#g`/`%#G` when rounding crosses into
-                // the next decade: `%#g` of 999999.5 prints `1.e+06`, not the
-                // `1.00000e+06` BSD libc (and this formatter) produce. Skip
-                // `#` for g/G here; `general_floats` pins the C99 behaviour.
-                let flag_sets: &[&str] = if conv == 'g' || conv == 'G' {
-                    &["", "-", "+", " ", "0", "+0", " 0"]
-                } else {
-                    &["", "-", "+", " ", "#", "0", "+0", "#0", "-#", " 0", "-+ #0"]
-                };
-                for flags in flag_sets {
+                for flags in ["", "-", "+", " ", "#", "0", "+0", "#0", "-#", " 0", "-+ #0"] {
                     for width in WIDTHS {
                         for prec in ["", ".0", ".1", ".6", ".17"] {
                             for v in values {
+                                // glibc strips the trailing zeros `#` is
+                                // supposed to keep (C99 7.19.6.1) from
+                                // `%#g`/`%#G` exactly when rounding carries
+                                // into the next decade: `%#g` of 999999.5
+                                // prints `1.e+06`, not the `1.00000e+06` BSD
+                                // libc (and this formatter) produce. Skip
+                                // just those rows — every non-carrying
+                                // `#` + g/G row stays oracle-checked;
+                                // `general_floats` and
+                                // `alt_g_decade_crossing_carry_keeps_zeros`
+                                // pin the C99 behaviour for the carries.
+                                if matches!(conv, 'g' | 'G') && flags.contains('#') {
+                                    // %g precision: default 6, and 0 acts as 1.
+                                    let p = match prec {
+                                        "" => 6,
+                                        _ => prec[1..].parse::<usize>().unwrap().max(1),
+                                    };
+                                    if carry_crosses_decade(v.abs(), p) {
+                                        continue;
+                                    }
+                                }
                                 let s = format!("{flags}{width}{prec}");
                                 let form = c_form(&s, "", conv);
                                 let expect = c_call(|buf| unsafe {
