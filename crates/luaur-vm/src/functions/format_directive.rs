@@ -463,6 +463,10 @@ mod tests {
         assert_eq!(float("#.1", b'g', 5.0), "5.");
         assert_eq!(float("", b'G', 1e-10), "1E-10");
         assert_eq!(float("", b'g', 999999.5), "1e+06"); // rounding crosses P
+                                                        // `#` keeps the zeros even across the decade crossover (C99; BSD libc
+                                                        // agrees, glibc strips them to `1.e+06` — see floats_match_snprintf).
+        assert_eq!(float("#", b'g', 999999.5), "1.00000e+06");
+        assert_eq!(float("#", b'G', 999999.5), "1.00000E+06");
         assert_eq!(float(".17", b'g', 0.1), "0.10000000000000001");
     }
 
@@ -594,7 +598,17 @@ mod tests {
                 5e-324,
             ];
             for conv in ['e', 'E', 'f', 'g', 'G'] {
-                for flags in ["", "-", "+", " ", "#", "0", "+0", "#0", "-#", " 0", "-+ #0"] {
+                // glibc strips the trailing zeros `#` is supposed to keep
+                // (C99 7.19.6.1) from `%#g`/`%#G` when rounding crosses into
+                // the next decade: `%#g` of 999999.5 prints `1.e+06`, not the
+                // `1.00000e+06` BSD libc (and this formatter) produce. Skip
+                // `#` for g/G here; `general_floats` pins the C99 behaviour.
+                let flag_sets: &[&str] = if conv == 'g' || conv == 'G' {
+                    &["", "-", "+", " ", "0", "+0", " 0"]
+                } else {
+                    &["", "-", "+", " ", "#", "0", "+0", "#0", "-#", " 0", "-+ #0"]
+                };
+                for flags in flag_sets {
                     for width in WIDTHS {
                         for prec in ["", ".0", ".1", ".6", ".17"] {
                             for v in values {
