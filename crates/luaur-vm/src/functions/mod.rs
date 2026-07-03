@@ -880,6 +880,7 @@ pub mod str_split;
 pub mod str_sub;
 pub mod str_unpack;
 pub mod str_upper;
+pub mod strftime_directive;
 pub mod stringresizeprotected;
 pub mod sweepgcopage;
 pub mod tableresizeprotected;

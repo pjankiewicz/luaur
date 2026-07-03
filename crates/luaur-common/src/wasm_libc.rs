@@ -317,7 +317,9 @@ pub unsafe extern "C" fn strtoull(
 }
 
 /// Broken-down time, matching the C `struct tm` field layout/order the
-/// translation's `os_date` uses.
+/// translation's `os_date` uses on non-Windows targets (wasm included): the
+/// nine C89 fields plus the BSD/glibc `tm_gmtoff`/`tm_zone` pair that the
+/// pure-Rust `%z`/`%Z` rendering reads.
 #[repr(C)]
 pub struct Tm {
     pub tm_sec: c_int,
@@ -329,11 +331,17 @@ pub struct Tm {
     pub tm_wday: c_int,
     pub tm_yday: c_int,
     pub tm_isdst: c_int,
+    pub tm_gmtoff: core::ffi::c_long,
+    pub tm_zone: *const c_char,
 }
 
 /// Convert a Unix timestamp to broken-down UTC time (civil calendar), shared by
-/// [`gmtime_r`] and [`localtime_r`] (the wasm build has no local timezone, so
-/// local == UTC). Uses Howard Hinnant's well-known days-from-civil inverse.
+/// [`gmtime_r`] and [`localtime_r`] (the wasm build has no timezone database,
+/// so local time **is** UTC). Uses Howard Hinnant's well-known days-from-civil
+/// inverse. The zone fields are pinned to match: `tm_gmtoff = 0` and
+/// `tm_zone = "UTC"`, so `os.date("%z")` / `os.date("%Z")` render `+0000` /
+/// `UTC` deterministically in the browser instead of lying about a local zone
+/// that does not exist there.
 unsafe fn fill_tm(secs: i64, result: *mut Tm) {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
@@ -365,6 +373,8 @@ unsafe fn fill_tm(secs: i64, result: *mut Tm) {
     let jan1 = days_from_civil(year, 1, 1);
     (*result).tm_yday = (days - jan1) as c_int;
     (*result).tm_isdst = 0;
+    (*result).tm_gmtoff = 0;
+    (*result).tm_zone = c"UTC".as_ptr();
 }
 
 /// Days from 1970-01-01 to the given civil date (Hinnant's days_from_civil).

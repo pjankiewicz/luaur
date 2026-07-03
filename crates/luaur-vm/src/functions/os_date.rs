@@ -2,9 +2,12 @@
 //!
 //! `os.date` — format a timestamp. An optional `!` prefix selects UTC; the format
 //! `*t` builds a table of broken-down fields; otherwise each `%` conversion spec
-//! is rendered through C `strftime`. `time`/`strftime`/`gmtime_r`/`localtime_r` are
-//! `extern "C"` declarations: they need no symbol at compile time, so this still
-//! type-checks on `wasm32-unknown-unknown` (a lib crate is never linked there).
+//! is rendered through the pure-Rust directive renderer (the C++ original
+//! forwards to `strftime`, which `wasm32-unknown-unknown` cannot bind — no libc
+//! — so the rendering is implemented natively for every target; see
+//! `strftime_directive` for the C-locale / timezone policy). The broken-down
+//! time still comes from `time`/`gmtime_r`/`localtime_r`, which the wasm build
+//! shims in `luaur-common::wasm_libc` (fixed clock, local == UTC).
 
 use crate::functions::localtime_r::{localtime_r, time_t, tm};
 use crate::functions::lua_createtable::lua_createtable;
@@ -15,6 +18,7 @@ use crate::functions::lua_l_pushresult::lua_l_pushresult;
 use crate::functions::lua_pushnil::lua_pushnil;
 use crate::functions::setboolfield::setboolfield;
 use crate::functions::setfield::setfield;
+use crate::functions::strftime_directive::strftime_directive;
 use crate::macros::lua_isnoneornil::lua_isnoneornil;
 use crate::macros::lua_l_addchar::luaL_addchar;
 use crate::macros::lua_l_argerror::luaL_argerror;
@@ -26,7 +30,6 @@ use core::ffi::{c_char, c_int};
 
 extern "C" {
     fn time(t: *mut time_t) -> time_t;
-    fn strftime(s: *mut c_char, max: usize, format: *const c_char, tm: *const tm) -> usize;
 }
 
 /// `gmtime_r` wrapper. The graph's `gmtime_r` dep unconditionally calls Windows
@@ -111,10 +114,8 @@ pub unsafe fn os_date(L: *mut lua_State) -> c_int {
                 luaL_argerror!(L, 1, "invalid conversion specifier");
             } else {
                 s = s.add(1);
-                let cc: [c_char; 3] = [b'%' as c_char, *s, 0];
-                let mut buff: [c_char; 200] = [0; 200]; // big enough for any conversion result
-                let reslen = strftime(buff.as_mut_ptr(), buff.len(), cc.as_ptr(), stm);
-                lua_l_addlstring(&mut b, buff.as_ptr(), reslen);
+                let rendered = strftime_directive(&*stm, *s as u8);
+                lua_l_addlstring(&mut b, rendered.as_ptr() as *const c_char, rendered.len());
             }
             s = s.add(1);
         }
