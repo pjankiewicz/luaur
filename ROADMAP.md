@@ -74,9 +74,17 @@ exists in Rust at all.
 - **Phase 1 is substantially complete:** compiler, register VM, type checker, and
   standard library; passes the ported conformance suite; runs at roughly 0.8× the
   reference C++ Luau interpreter (JIT-free), and compiles bytecode ~1.3× faster.
-- **Phase-2 motivators being tracked and fenced by tests** — e.g. an
-  arena-lifetime use-after-free in `check_with_definitions` under repeated calls /
-  larger definition files (issue #6): a `TypeId` whose backing arena is freed
-  while the type checker still reads it. It is precisely the raw-pointer-lifetime
-  class that Phase 2 eliminates by construction; until then it is reproduced,
-  characterized, and guarded by the `typeck_defs` fuzz target.
+- **Phase-2 motivators: found instances of the raw-pointer class are fixed and
+  fenced by tests.** The canonical example is issue #6 — `check_with_definitions`
+  SIGSEGVing under repeated calls / larger definition files. Root-caused (via
+  Miri) to two defects only the raw-pointer model can express: a cross-id cast
+  that ran *type* unification on a *type pack* (layout-dependent UB — crashed on
+  rustc 1.88, hidden on newer layouts), and definition-module arenas freed while
+  the global scope still referenced their types (an arena-lifetime
+  use-after-free). Both are **fixed**, verified on the toolchain that crashed and
+  under Miri, and pinned by regression tests
+  (`crates/luaur-rt/tests/issue6_repro_check.rs`, `tests/miri_issue6.rs`) plus
+  the `typeck_defs` fuzz target. Phase 2 exists to make the *class*
+  inexpressible — typed index handles turn the cross-id cast into a compile
+  error and the arena lifetime into a borrow-check error — instead of catching
+  it one instance at a time.
