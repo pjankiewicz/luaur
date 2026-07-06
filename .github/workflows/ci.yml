@@ -55,6 +55,20 @@ jobs:
       - name: Build workspace
         run: cargo build --workspace --locked
 
+      # `cargo install` from crates.io does not include this repository's
+      # `.cargo/config.toml`. Build the installable CLI from a copy without that
+      # config so packaged MSVC link requirements stay covered.
+      - name: Install luaur-repl-cli without workspace cargo config
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $src = Join-Path $env:RUNNER_TEMP "luaur-install-src"
+          $root = Join-Path $env:RUNNER_TEMP "luaur-install-root"
+          New-Item -ItemType Directory -Force $src | Out-Null
+          Get-ChildItem -Force | Where-Object { $_.Name -notin @(".git", ".cargo", "target") } |
+            Copy-Item -Destination $src -Recurse -Force
+          cargo install --path (Join-Path $src "crates/luaur-repl-cli") --locked --root $root
+
       # Default features: the ~5.6k translated unit tests + conformance + e2e.
       # RUST_MIN_STACK (.cargo/config.toml) and the nextest thread/timeout config
       # (.config/nextest.toml) are picked up automatically on every platform.

@@ -7,7 +7,6 @@ use luaur_vm::records::lua_state::lua_State;
 use luaur_vm::records::udata::Udata;
 
 unsafe extern "C" {
-    #[link_name = "luaU_newudata"]
     #[link_name = "luaur_luaU_newudata"]
     fn luaU_newudata(L: *mut lua_State, s: usize, tag: c_int) -> *mut Udata;
 }
