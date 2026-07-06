@@ -1,6 +1,7 @@
 [
   {"label": "luaur",       "cmd": ["../target/release/luaur"],          "lang": "Luau (pure Rust, this repo)"},
   {"label": "tsuki",       "cmd": ["drivers/tsuki-run/target/release/tsuki-run"], "lang": "Lua 5.4 (pure Rust)"},
+  {"label": "lua-rs",      "cmd": ["/path/to/lua-rs/target/release/lua"], "lang": "Lua 5.5 (pure Rust, CppCXY/lua-rs)"},
   {"label": "C++ luau",    "cmd": ["/path/to/luau/build/luau"],          "lang": "Luau (reference C++)"},
   {"label": "mlua/luau",   "cmd": ["drivers/mlua-run/target/release/mlua-luau"],   "lang": "Luau (C via Rust FFI)"},
   {"label": "mlua/lua5.4", "cmd": ["drivers/mlua-run/target/release/mlua-lua54"],  "lang": "Lua 5.4 (C via Rust FFI)"},

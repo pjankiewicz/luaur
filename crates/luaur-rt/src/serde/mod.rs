@@ -163,7 +163,10 @@ pub(crate) fn has_array_metatable(table: &Table) -> bool {
 /// sentinel tables themselves are freed with the state's registry on `lua_close`.
 /// Without this the (now stale) pointer entry would leak one slot per state.
 pub(crate) fn clear_sentinels(state: *mut lua_State) {
-    SENTINELS.with(|c| {
+    // `Lua` can itself be stored in TLS. During thread teardown this drop may
+    // run after the serde sentinel TLS has started destruction, in which case
+    // the map is already going away and there is nothing left to evict.
+    let _ = SENTINELS.try_with(|c| {
         c.borrow_mut().remove(&state);
     });
 }

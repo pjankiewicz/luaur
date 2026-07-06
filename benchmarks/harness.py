@@ -10,6 +10,7 @@ Usage:
     cp engines.example.json engines.json   # then edit paths
     python3 harness.py                      # all programs
     python3 harness.py fib matmul           # a subset
+    ENGINES=/tmp/engines.json python3 harness.py
     RUNS=9 REF="C++ luau" python3 harness.py
 """
 import subprocess, time, statistics, json, os, sys, shutil
@@ -20,11 +21,21 @@ PROGS = ["fib", "nbody", "mandel", "matmul", "tablesort", "strings"]
 RUNS = int(os.environ.get("RUNS", "7"))
 WARMUP = 1
 REF = os.environ.get("REF", "C++ luau")
+ENGINES_FILE = os.environ.get("ENGINES", os.path.join(HERE, "engines.json"))
 
-with open(os.path.join(HERE, "engines.json")) as f:
+with open(ENGINES_FILE) as f:
     ENGINES = json.load(f)
 if len(sys.argv) > 1:
     PROGS = sys.argv[1:]
+
+def resolve_cmd(cmd):
+    resolved = [os.path.expandvars(os.path.expanduser(part)) for part in cmd]
+    binary = resolved[0]
+    if os.path.isabs(binary):
+        return resolved
+    if os.sep in binary or (os.altsep and os.altsep in binary):
+        resolved[0] = os.path.join(HERE, binary)
+    return resolved
 
 results = {}
 for prog in PROGS:
@@ -38,10 +49,11 @@ for prog in PROGS:
             continue
         # Skip an engine whose binary isn't installed (e.g. you only have a few
         # of the Lua engines, or just luaur + python) instead of crashing.
-        if shutil.which(eng["cmd"][0]) is None:
+        cmd = resolve_cmd(eng["cmd"])
+        if shutil.which(cmd[0]) is None:
             results[(prog, eng["label"])] = ("ERR", "no binary")
             continue
-        full = eng["cmd"] + [path]
+        full = cmd + [path]
         ts, out, err = [], None, None
         for _ in range(WARMUP):
             subprocess.run(full, capture_output=True, text=True)
