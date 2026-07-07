@@ -5,7 +5,7 @@
 //! "verbatim mlua" suite clean.
 #![cfg(feature = "typecheck")]
 
-use luaur_rt::{check, check_with_definitions, Error, Lua, TypeDiagnostic};
+use luaur_rt::{check, check_modules, check_with_definitions, Error, Lua, TypeDiagnostic};
 
 // ---------------------------------------------------------------------------
 // Free functions returning structured diagnostics.
@@ -83,6 +83,36 @@ fn malformed_definitions_flagged_in_definitions() {
         diagnostics.iter().any(|d| d.in_definitions),
         "malformed-definition diagnostic should carry in_definitions == true: {diagnostics:?}"
     );
+}
+
+#[test]
+fn check_modules_uses_required_module_surface() {
+    check_modules(
+        "game/Main",
+        &[
+            (
+                "game/Main",
+                r#"
+--!strict
+local Math = require("@math")
+local total: number = Math.add(40, 2)
+return total
+"#,
+            ),
+            (
+                "@math",
+                r#"
+--!strict
+local Math = {}
+function Math.add(a: number, b: number): number
+    return a + b
+end
+return Math
+"#,
+            ),
+        ],
+    )
+    .expect("root should type-check against required module exports");
 }
 
 // ---------------------------------------------------------------------------

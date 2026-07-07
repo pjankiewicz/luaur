@@ -1,0 +1,19 @@
+[package]
+name = "luaur-checked-macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Compile-time checked Luau source macros for luaur."
+keywords = ["luau", "lua", "macro", "typechecker"]
+categories = ["compilers", "development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+luaur-rt = { path = "../luaur-rt", version = "0.1.8", features = ["typecheck"] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }

@@ -12,7 +12,7 @@ dependency order** (a topological sort of the workspace graph).
 - Test/harness crates are marked `publish = false` and are **not** released:
   `luaur-unit-test`, `luaur-cli-test`, `luaur-conformance`.
 - The `luaur-*` names are free on crates.io and must be owned by the publishing account.
-- `cargo publish` runs a verification build per crate; budget time for ~17 builds.
+- `cargo publish` runs a verification build per crate; budget time for ~21 builds.
 
 ## Publish order
 
@@ -38,17 +38,19 @@ Publish top-to-bottom; each layer only depends on layers above it.
 8.  luaur-analysis      (ast, bytecode, compiler, config, vm, common)
 9.  luaur-require       (+ config)
 10. luaur-cli-lib       (+ config)
-11. luaur-rt            (vm, compiler, common — the mlua-style API; also luaur-config + luaur-analysis, optional, only under the `typecheck` feature — both already published above at 7 and 8)
+11. luaur-rt-derive     (proc-macro derives for luaur-rt)
+12. luaur-rt            (vm, compiler, common — the mlua-style API; also luaur-config + luaur-analysis, optional, only under the `typecheck` feature — both already published above at 7 and 8)
 
 # Layer 5 — umbrella + leaves (wasm + CLIs)
-12. luaur               (umbrella: re-exports every lib + luaur-rt — publish after them all)
-13. luaur-web           (analysis, ...)
-14. luaur-ast-cli
-15. luaur-analyze-cli
-16. luaur-bytecode-cli
-17. luaur-compile-cli
-18. luaur-reduce-cli
-19. luaur-repl-cli
+13. luaur-checked-macros (compile-time checked Luau source macros; depends on luaur-rt)
+14. luaur               (umbrella: re-exports every lib + luaur-rt + checked macros — publish after them all)
+15. luaur-web           (analysis, ...)
+16. luaur-ast-cli
+17. luaur-analyze-cli
+18. luaur-bytecode-cli
+19. luaur-compile-cli
+20. luaur-reduce-cli
+21. luaur-repl-cli
 ```
 
 ## Recommended dry run
@@ -56,9 +58,9 @@ Publish top-to-bottom; each layer only depends on layers above it.
 ```sh
 # Verify every publishable crate packages cleanly, in order, without uploading:
 for c in luaur-common luaur-ast luaur-bytecode luaur-vm luaur-compiler luaur-code-gen \
-         luaur-config luaur-analysis luaur-require luaur-cli-lib luaur-rt luaur luaur-web \
-         luaur-ast-cli luaur-analyze-cli luaur-bytecode-cli luaur-compile-cli \
-         luaur-reduce-cli luaur-repl-cli; do
+         luaur-config luaur-analysis luaur-require luaur-cli-lib luaur-rt-derive luaur-rt \
+         luaur-checked-macros luaur luaur-web luaur-ast-cli luaur-analyze-cli \
+         luaur-bytecode-cli luaur-compile-cli luaur-reduce-cli luaur-repl-cli; do
   cargo publish -p "$c" --dry-run || { echo "FAILED: $c"; break; }
 done
 ```

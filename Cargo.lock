@@ -233,6 +233,7 @@ dependencies = [
  "luaur-analysis",
  "luaur-ast",
  "luaur-bytecode",
+ "luaur-checked-macros",
  "luaur-common",
  "luaur-compiler",
  "luaur-config",
@@ -316,6 +317,16 @@ dependencies = [
  "luaur-config",
  "luaur-vm",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "luaur-checked-macros"
+version = "0.1.8"
+dependencies = [
+ "luaur-rt",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

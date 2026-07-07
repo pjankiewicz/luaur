@@ -1,0 +1,1 @@
+declare game: any

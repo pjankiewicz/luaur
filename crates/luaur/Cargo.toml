@@ -28,6 +28,7 @@ luaur-analysis = { path = "../luaur-analysis", version = "0.1.8" }
 luaur-config = { path = "../luaur-config", version = "0.1.8" }
 luaur-require = { path = "../luaur-require", version = "0.1.8" }
 luaur-rt = { path = "../luaur-rt", version = "0.1.8" }
+luaur-checked-macros = { path = "../luaur-checked-macros", version = "0.1.8", optional = true }
 luaur-repl-cli = { path = "../luaur-repl-cli", version = "0.1.8", optional = true }
 
 [features]
@@ -46,6 +47,9 @@ async = ["luaur-rt/async"]
 serde = ["luaur-rt/serde"]
 send = ["luaur-rt/send"]
 macros = ["luaur-rt/macros"]
+# Compile-time checked Luau source macros (`luau!` / `luau_file!`). Kept
+# separate from `macros`, which forwards only the luaur-rt derive macro surface.
+checked-macros = ["typecheck", "dep:luaur-checked-macros"]
 # The static type checker (forwards to luaur-rt's `typecheck`). On by default via
 # `default`; named here so `default-features = false` users can opt back in.
 typecheck = ["luaur-rt/typecheck"]

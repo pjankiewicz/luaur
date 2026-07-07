@@ -98,7 +98,8 @@ luaur = { version = "0.1", features = ["serde", "async", "macros"] }   # or "sen
 
 `serde` (Rust↔Lua `Serialize`/`Deserialize`), `async` (Rust futures ↔ Luau coroutines),
 `send` (`Send`/`Sync` handles, mutually exclusive with `async`, as in mlua), and `macros`
-(`#[derive(UserData)]` / `#[derive(FromLua)]`).
+(`#[derive(UserData)]` / `#[derive(FromLua)]`). Compile-time checked Luau source macros are
+separate: enable `checked-macros` when you want `luaur::luau!` / `luaur::luau_file!`.
 
 ### A type checker mlua can't have
 
@@ -127,6 +128,29 @@ lua.add_definitions("declare function add(a: number, b: number): number")?;
 let chunk = lua.load("local n: number = add(1, 2)\nreturn n");
 chunk.check()?;   // Err(Error::TypeError(Vec<TypeDiagnostic>)) on a mismatch
 chunk.exec()?;
+```
+
+For Rust-compile-time checking, enable `checked-macros`. Inline scripts work sqlx-style:
+
+```rust
+let source = luaur::luau!(r#"
+--!strict
+local total: number = 40 + 2
+return total
+"#);
+```
+
+File-based scripts can declare their module graph so `require(...)` gets checked too:
+
+```rust
+let source = luaur::luau_file! {
+    root = "scripts/main.luau",
+    module = "game/Main",
+    modules = {
+        "game/Math" => "scripts/math.luau",
+        "@config" => "scripts/config.luau",
+    },
+};
 ```
 
 ## How idiomatic is it?

@@ -21,6 +21,7 @@ members = [
     "crates/luaur-repl-cli",
     "crates/luaur-require",
     "crates/luaur-rt",
+    "crates/luaur-checked-macros",
     "crates/luaur-rt-derive",
     "crates/luaur-unit-test",
     "crates/luaur-vm",
