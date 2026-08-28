@@ -21,6 +21,8 @@
 
 use std::sync::Arc;
 
+use std::collections::BTreeMap;
+
 use luaur_rt::{
     Error, Function, Lua, MetaMethod, Result, UserData, UserDataFields, UserDataMethods, Variadic,
 };
@@ -357,6 +359,43 @@ fn test_userdata_drop_runs_destructor() -> Result<()> {
         dropped.load(Ordering::SeqCst),
         "userdata destructor should have run"
     );
+
+    Ok(())
+}
+
+// A custom `__index` meta-method must be honored on userdata that registers
+// no fields (previously it was overwritten by the method table).
+#[test]
+fn test_custom_index_metamethod_without_fields() -> Result<()> {
+    struct JsonCursor {
+        values: BTreeMap<String, String>,
+    }
+
+    impl UserData for JsonCursor {
+        fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+            methods.add_meta_method(MetaMethod::Index, |_, this, key: String| {
+                Ok(this.values.get(&key).cloned())
+            });
+            methods.add_method("count", |_, this, ()| Ok(this.values.len()));
+        }
+    }
+
+    let lua = Lua::new();
+    let cursor = JsonCursor {
+        values: BTreeMap::from([("alpha".into(), "one".into())]),
+    };
+    lua.globals().set("cursor", cursor)?;
+
+    let resolved: String = lua.load(r#"return cursor["alpha"]"#).eval()?;
+    assert_eq!(resolved, "one");
+
+    // Unresolved keys return nil from the custom __index...
+    let missing: Option<String> = lua.load(r#"return cursor["missing"]"#).eval()?;
+    assert_eq!(missing, None);
+
+    // ...and regular methods remain reachable.
+    let count: usize = lua.load("return cursor:count()").eval()?;
+    assert_eq!(count, 1);
 
     Ok(())
 }

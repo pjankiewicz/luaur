@@ -27,6 +27,7 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 
 use crate::callback::{create_callback_function, BoxedCallback};
+use crate::function::Function;
 use crate::error::{Error, Result};
 use crate::state::{Lua, LuaRef};
 use crate::sync::{MaybeSend, MaybeSync, NotSync, XRc, NOT_SYNC};
@@ -1107,7 +1108,25 @@ pub(crate) fn create_scoped_userdata<T: UserData>(
             })?;
         metatable.set("__newindex", newindex_fn)?;
     } else {
-        metatable.set("__index", method_table)?;
+        let user_index: Option<Function> = metatable.get("__index")?;
+        match user_index {
+            Some(user_index) => {
+                let methods_c = method_table.clone();
+                let index_fn = lua.create_function(
+                    move |_, (ud, key): (AnyUserData, Value)| {
+                        let resolved: Value = user_index.call((ud.clone(), key.clone()))?;
+                        if resolved == Value::Nil {
+                            return methods_c.get(key);
+                        }
+                        Ok(resolved)
+                    },
+                )?;
+                metatable.set("__index", index_fn)?;
+            }
+            None => {
+                metatable.set("__index", method_table)?;
+            }
+        }
     }
 
     // 3. Allocate the scoped userdata holding ScopedCell<T> and move `data` in.
@@ -1228,8 +1247,28 @@ pub(crate) fn create_userdata<T: UserData + MaybeSend + MaybeSync + 'static>(
             })?;
         metatable.set("__newindex", newindex_fn)?;
     } else {
-        // No fields: the metatable's __index is just the method table.
-        metatable.set("__index", method_table)?;
+        // No fields: the metatable's __index is the method table, unless the
+        // user registered a custom `__index` meta-method, which takes
+        // precedence (falling back to the method table when it returns nil).
+        let user_index: Option<Function> = metatable.get("__index")?;
+        match user_index {
+            Some(user_index) => {
+                let methods_c = method_table.clone();
+                let index_fn = lua.create_function(
+                    move |_, (ud, key): (AnyUserData, Value)| {
+                        let resolved: Value = user_index.call((ud.clone(), key.clone()))?;
+                        if resolved == Value::Nil {
+                            return methods_c.get(key);
+                        }
+                        Ok(resolved)
+                    },
+                )?;
+                metatable.set("__index", index_fn)?;
+            }
+            None => {
+                metatable.set("__index", method_table)?;
+            }
+        }
     }
 
     // 3. Allocate the userdata holding UserDataCell<T> and move `data` in.
