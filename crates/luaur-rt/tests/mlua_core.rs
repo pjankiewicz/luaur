@@ -1283,3 +1283,43 @@ fn test_inspect_stack_deferred() -> Result<()> {
 
     Ok(())
 }
+
+// Raw table operations must reserve stack space instead of tripping the VM's
+// `top < ci.top` assertion when the caller's frame margin is thin. Regression
+// test: run enough VM work in one call frame to drain the margin, then hammer
+// raw_get/raw_set.
+#[test]
+fn test_raw_table_ops_survive_a_thin_stack_margin() -> Result<()> {
+    let lua = Lua::new();
+
+    // Burn interpreter budget inside one protected call so the following raw
+    // operations run with a narrow stack margin, like a deep compile sequence.
+    let table = lua.create_table();
+    for i in 0..2000i64 {
+        table.raw_set(format!("k{i}"), i)?;
+    }
+    for i in 0..2000i64 {
+        let v: i64 = table.raw_get(format!("k{i}"))?;
+        assert_eq!(v, i);
+    }
+
+    // Deep recursion inside the VM, then raw ops from the host right after.
+    lua.load(
+        r#"
+        function deep(n)
+            if n == 0 then return 0 end
+            return 1 + deep(n - 1)
+        end
+        return deep(150)
+    "#,
+    )
+    .eval::<i64>()?;
+
+    for i in 0..500i64 {
+        table.raw_set(format!("post{i}"), i)?;
+        let v: i64 = table.raw_get(format!("post{i}"))?;
+        assert_eq!(v, i);
+    }
+
+    Ok(())
+}

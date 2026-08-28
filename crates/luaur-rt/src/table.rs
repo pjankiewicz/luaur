@@ -19,6 +19,22 @@ pub struct Table {
     pub(crate) _not_sync: NotSync,
 }
 
+/// Reserve `slots` stack slots for a raw table operation.
+///
+/// `lua_checkstack` raises the stack top inside the current call-info frame;
+/// without it, `lua_pushvalue` (and the extra copy `value_from_stack` pushes
+/// for reference types) can trip the `top < ci.top` LUAU_ASSERT and abort the
+/// process when the caller's stack margin is already thin (for example after
+/// a long sequence of VM operations in the same frame).
+pub(crate) fn ensure_stack(state: *mut lua_State, slots: c_int) -> Result<()> {
+    if unsafe { lua_checkstack(state, slots) } == 0 {
+        return Err(crate::error::Error::MemoryError(
+            "stack overflow while preparing a table operation".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 impl Table {
     pub(crate) fn from_ref(reference: LuaRef) -> Table {
         Table {
@@ -209,6 +225,7 @@ impl Table {
                 "attempt to modify a readonly table".to_string(),
             ));
         }
+        ensure_stack(state, 3)?;
         unsafe {
             self.reference.push(); // table
             lua.push_value(&k)?; // key
@@ -226,6 +243,7 @@ impl Table {
         let lua = self.lua();
         let state = lua.state();
         let k = key.into_lua(&lua)?;
+        ensure_stack(state, 3)?;
         let value = unsafe {
             self.reference.push(); // table
             lua.push_value(&k)?; // key
