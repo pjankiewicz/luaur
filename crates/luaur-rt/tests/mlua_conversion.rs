@@ -492,3 +492,32 @@ fn test_char_from_lua() -> Result<()> {
 
     Ok(())
 }
+
+// -0.0 must round-trip as a float: `Value::Integer` cannot carry the sign bit,
+// and mlua surfaces -0.0 as a float too. Regression test for the whole-number
+// normalization that folded -0.0 into `Value::Integer(0)`.
+#[test]
+fn test_negative_zero_round_trips_as_number() -> Result<()> {
+    let lua = Lua::new();
+
+    let neg_zero: f64 = -0.0;
+    let value = neg_zero.into_lua(&lua)?;
+    assert!(
+        matches!(value, Value::Number(n) if n.to_bits() == neg_zero.to_bits()),
+        "-0.0 must stay Value::Number with its sign bit intact, got {value:?}"
+    );
+
+    // Script-level round trip preserves the sign bit as well.
+    let back: f64 = lua.load("return -0.0").eval()?;
+    assert_eq!(back.to_bits(), neg_zero.to_bits());
+
+    // Positive zero keeps working through the whole pipeline.
+    let pos_zero: f64 = lua.load("return 0").eval()?;
+    assert_eq!(pos_zero.to_bits(), 0f64.to_bits());
+
+    // Integer semantics for nonzero values are unchanged.
+    let int: i64 = lua.load("return 42").eval()?;
+    assert_eq!(int, 42);
+
+    Ok(())
+}

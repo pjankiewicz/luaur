@@ -410,7 +410,12 @@ pub(crate) fn value_from_stack(lua: &Lua, idx: c_int) -> Result<Value> {
             }
             x if x == ttype::NUMBER => {
                 let n = lua_tonumberx(state, idx, core::ptr::null_mut());
-                if is_exact_integer(n) {
+                // Zero is never presented as `Integer`: `-0.0` cannot be
+                // represented as an `i64` without losing its sign bit, and
+                // mlua also surfaces -0.0 as a float. `FromLua for i64`
+                // still accepts whole-number floats, so integer call sites
+                // are unaffected.
+                if is_exact_integer(n) && n != 0.0 {
                     Value::Integer(n as i64)
                 } else {
                     Value::Number(n)
