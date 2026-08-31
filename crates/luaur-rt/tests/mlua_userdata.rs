@@ -399,3 +399,115 @@ fn test_custom_index_metamethod_without_fields() -> Result<()> {
 
     Ok(())
 }
+
+// The same must hold when the type *also* registers fields: mlua's generated
+// `__index` falls through field getters -> methods -> the custom `__index`.
+#[test]
+fn test_custom_index_metamethod_with_fields() -> Result<()> {
+    struct Record {
+        id: i64,
+        extra: BTreeMap<String, String>,
+    }
+
+    impl UserData for Record {
+        fn add_fields<F: luaur_rt::UserDataFields<Self>>(fields: &mut F) {
+            fields.add_field_method_get("id", |_, this| Ok(this.id));
+        }
+
+        fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+            methods.add_method("kind", |_, _, ()| Ok("record"));
+            methods.add_meta_method(MetaMethod::Index, |_, this, key: String| {
+                Ok(this.extra.get(&key).cloned())
+            });
+        }
+    }
+
+    let lua = Lua::new();
+    lua.globals().set(
+        "rec",
+        Record {
+            id: 7,
+            extra: BTreeMap::from([("note".into(), "hello".into())]),
+        },
+    )?;
+
+    // Field getter wins.
+    assert_eq!(lua.load("return rec.id").eval::<i64>()?, 7);
+    // Method is reachable.
+    assert_eq!(lua.load("return rec:kind()").eval::<String>()?, "record");
+    // Neither a field nor a method: the custom __index resolves it.
+    assert_eq!(lua.load(r#"return rec["note"]"#).eval::<String>()?, "hello");
+    // Unknown key: nil (luaur-rt returns nil where mlua raises).
+    assert_eq!(
+        lua.load(r#"return rec["nope"]"#).eval::<Option<String>>()?,
+        None
+    );
+
+    Ok(())
+}
+
+// Precedence check: a field getter and a method shadow a custom `__index` that
+// would also answer the same key (mlua's order).
+#[test]
+fn test_custom_index_metamethod_precedence() -> Result<()> {
+    struct Shadow;
+
+    impl UserData for Shadow {
+        fn add_fields<F: luaur_rt::UserDataFields<Self>>(fields: &mut F) {
+            fields.add_field_method_get("field", |_, _| Ok("from_field"));
+        }
+
+        fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+            methods.add_method("method", |_, _, ()| Ok("from_method"));
+            methods.add_meta_method(MetaMethod::Index, |_, _, _key: String| {
+                Ok("from_index".to_string())
+            });
+        }
+    }
+
+    let lua = Lua::new();
+    lua.globals().set("s", Shadow)?;
+
+    assert_eq!(lua.load("return s.field").eval::<String>()?, "from_field");
+    assert_eq!(
+        lua.load("return s:method()").eval::<String>()?,
+        "from_method"
+    );
+    assert_eq!(lua.load("return s.other").eval::<String>()?, "from_index");
+
+    Ok(())
+}
+
+// Scoped userdata takes the same path.
+#[test]
+fn test_custom_index_metamethod_scoped() -> Result<()> {
+    struct ScopedCursor {
+        values: BTreeMap<String, String>,
+    }
+
+    impl UserData for ScopedCursor {
+        fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+            methods.add_meta_method(MetaMethod::Index, |_, this, key: String| {
+                Ok(this.values.get(&key).cloned())
+            });
+            methods.add_method("count", |_, this, ()| Ok(this.values.len()));
+        }
+    }
+
+    let lua = Lua::new();
+    lua.scope(|scope| {
+        let ud = scope.create_userdata(ScopedCursor {
+            values: BTreeMap::from([("alpha".into(), "one".into())]),
+        })?;
+        lua.globals().set("scoped", ud)?;
+        assert_eq!(
+            lua.load(r#"return scoped["alpha"]"#).eval::<String>()?,
+            "one"
+        );
+        assert_eq!(lua.load("return scoped:count()").eval::<usize>()?, 1);
+        Ok(())
+    })?;
+    lua.globals().set("scoped", luaur_rt::Value::Nil)?;
+
+    Ok(())
+}

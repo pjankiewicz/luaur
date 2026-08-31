@@ -27,11 +27,12 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 
 use crate::callback::{create_callback_function, BoxedCallback};
-use crate::function::Function;
 use crate::error::{Error, Result};
+use crate::function::Function;
 use crate::state::{Lua, LuaRef};
 use crate::sync::{MaybeSend, MaybeSync, NotSync, XRc, NOT_SYNC};
 use crate::sys::*;
+use crate::table::Table;
 use crate::traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti};
 use crate::value::Value;
 
@@ -1032,6 +1033,57 @@ impl<T> UserDataFields<T> for ScopedCollector<T> {
     }
 }
 
+/// Install the userdata metatable's `__index`.
+///
+/// Mirrors mlua's generated `__index` (`mlua::userdata::util`): a lookup falls
+/// through **field getters → the method table → a user-registered `__index`
+/// meta-method**. A custom `__index` set by [`UserDataMethods::add_meta_method`]
+/// therefore stays reachable instead of being overwritten by the method table
+/// or the field dispatcher.
+///
+/// The cheap case — no fields and no custom `__index` — keeps `__index` as the
+/// method table itself, so ordinary method lookup stays a plain table access.
+///
+/// DEVIATION from mlua: an unresolved key yields `nil` rather than raising
+/// "attempt to get an unknown field", matching luaur-rt's existing behavior.
+fn install_index_dispatcher(
+    lua: &Lua,
+    metatable: &Table,
+    method_table: Table,
+    getters: Table,
+    has_fields: bool,
+) -> Result<()> {
+    // A custom `__index` was written onto the metatable by the meta-method loop
+    // above; capture it here so the dispatcher can fall back to it. Only
+    // functions can land there (`add_meta_method`/`add_meta_method_mut` are the
+    // only ways in), so a non-function `__index` is not representable.
+    let user_index: Option<Function> = metatable.raw_get("__index")?;
+
+    if !has_fields && user_index.is_none() {
+        metatable.set("__index", method_table)?;
+        return Ok(());
+    }
+
+    let index_fn = lua.create_function(move |_, (ud, key): (Value, Value)| {
+        if has_fields {
+            let getter: Value = getters.get(key.clone())?;
+            if let Value::Function(f) = getter {
+                return f.call::<Value>(ud);
+            }
+        }
+        let method: Value = method_table.get(key.clone())?;
+        if method != Value::Nil {
+            return Ok(method);
+        }
+        match &user_index {
+            Some(f) => f.call::<Value>((ud, key)),
+            None => Ok(Value::Nil),
+        }
+    })?;
+    metatable.set("__index", index_fn)?;
+    Ok(())
+}
+
 /// Build a scoped (non-`'static`) userdata wrapping `data`, with a metatable
 /// assembled from `T::add_fields` + `T::add_methods`. Returns the
 /// [`AnyUserData`] handle plus a closure that, when called, neutralises the
@@ -1081,18 +1133,6 @@ pub(crate) fn create_scoped_userdata<T: UserData>(
     }
 
     if has_fields {
-        let getters_c = getters.clone();
-        let methods_c = method_table.clone();
-        let index_fn = lua.create_function(move |_, (ud, key): (Value, Value)| {
-            let getter: Value = getters_c.get(key.clone())?;
-            if let Value::Function(f) = getter {
-                return f.call::<Value>(ud);
-            }
-            let m: Value = methods_c.get(key)?;
-            Ok(m)
-        })?;
-        metatable.set("__index", index_fn)?;
-
         let setters_c = setters.clone();
         let newindex_fn =
             lua.create_function(move |_, (ud, key, val): (Value, Value, Value)| {
@@ -1107,27 +1147,8 @@ pub(crate) fn create_scoped_userdata<T: UserData>(
                 )))
             })?;
         metatable.set("__newindex", newindex_fn)?;
-    } else {
-        let user_index: Option<Function> = metatable.get("__index")?;
-        match user_index {
-            Some(user_index) => {
-                let methods_c = method_table.clone();
-                let index_fn = lua.create_function(
-                    move |_, (ud, key): (AnyUserData, Value)| {
-                        let resolved: Value = user_index.call((ud.clone(), key.clone()))?;
-                        if resolved == Value::Nil {
-                            return methods_c.get(key);
-                        }
-                        Ok(resolved)
-                    },
-                )?;
-                metatable.set("__index", index_fn)?;
-            }
-            None => {
-                metatable.set("__index", method_table)?;
-            }
-        }
     }
+    install_index_dispatcher(lua, &metatable, method_table, getters, has_fields)?;
 
     // 3. Allocate the scoped userdata holding ScopedCell<T> and move `data` in.
     let ud = unsafe {
@@ -1217,20 +1238,6 @@ pub(crate) fn create_userdata<T: UserData + MaybeSend + MaybeSync + 'static>(
     }
 
     if has_fields {
-        // __index dispatcher: try a field getter, then the method table.
-        let getters_c = getters.clone();
-        let methods_c = method_table.clone();
-        let index_fn = lua.create_function(move |_, (ud, key): (Value, Value)| {
-            let getter: Value = getters_c.get(key.clone())?;
-            if let Value::Function(f) = getter {
-                return f.call::<Value>(ud);
-            }
-            // Fall back to the method table.
-            let m: Value = methods_c.get(key)?;
-            Ok(m)
-        })?;
-        metatable.set("__index", index_fn)?;
-
         // __newindex dispatcher: try a field setter, else raise.
         let setters_c = setters.clone();
         let newindex_fn =
@@ -1246,30 +1253,9 @@ pub(crate) fn create_userdata<T: UserData + MaybeSend + MaybeSync + 'static>(
                 )))
             })?;
         metatable.set("__newindex", newindex_fn)?;
-    } else {
-        // No fields: the metatable's __index is the method table, unless the
-        // user registered a custom `__index` meta-method, which takes
-        // precedence (falling back to the method table when it returns nil).
-        let user_index: Option<Function> = metatable.get("__index")?;
-        match user_index {
-            Some(user_index) => {
-                let methods_c = method_table.clone();
-                let index_fn = lua.create_function(
-                    move |_, (ud, key): (AnyUserData, Value)| {
-                        let resolved: Value = user_index.call((ud.clone(), key.clone()))?;
-                        if resolved == Value::Nil {
-                            return methods_c.get(key);
-                        }
-                        Ok(resolved)
-                    },
-                )?;
-                metatable.set("__index", index_fn)?;
-            }
-            None => {
-                metatable.set("__index", method_table)?;
-            }
-        }
     }
+    // __index: field getters -> method table -> a custom `__index` meta-method.
+    install_index_dispatcher(lua, &metatable, method_table, getters, has_fields)?;
 
     // 3. Allocate the userdata holding UserDataCell<T> and move `data` in.
     unsafe {
