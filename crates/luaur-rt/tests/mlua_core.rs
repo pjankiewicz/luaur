@@ -1284,16 +1284,15 @@ fn test_inspect_stack_deferred() -> Result<()> {
     Ok(())
 }
 
-// Raw table operations must reserve stack space instead of tripping the VM's
-// `top < ci.top` assertion when the caller's frame margin is thin. Regression
-// test: run enough VM work in one call frame to drain the margin, then hammer
-// raw_get/raw_set.
+// `raw_set` / `raw_get` reserve their stack slots up front (`lua_checkstack`)
+// instead of pushing blind, matching the guards in `Function::call` /
+// `Thread::resume`. Coverage for sustained raw traffic interleaved with VM
+// work; it does not by itself drive the frame margin low enough to trip the
+// VM's `top < ci.top` assertion (a C frame always gets LUA_MINSTACK headroom).
 #[test]
-fn test_raw_table_ops_survive_a_thin_stack_margin() -> Result<()> {
+fn test_raw_table_ops_reserve_stack_space() -> Result<()> {
     let lua = Lua::new();
 
-    // Burn interpreter budget inside one protected call so the following raw
-    // operations run with a narrow stack margin, like a deep compile sequence.
     let table = lua.create_table();
     for i in 0..2000i64 {
         table.raw_set(format!("k{i}"), i)?;

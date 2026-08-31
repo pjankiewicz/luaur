@@ -28,8 +28,10 @@ pub struct Table {
 /// a long sequence of VM operations in the same frame).
 pub(crate) fn ensure_stack(state: *mut lua_State, slots: c_int) -> Result<()> {
     if unsafe { lua_checkstack(state, slots) } == 0 {
-        return Err(crate::error::Error::MemoryError(
-            "stack overflow while preparing a table operation".to_string(),
+        // Same shape as the guards in `Function::call` / `Thread::resume`:
+        // a catchable `RuntimeError` rather than a VM abort.
+        return Err(crate::error::Error::RuntimeError(
+            "stack overflow: not enough stack space for a raw table operation".to_string(),
         ));
     }
     Ok(())
