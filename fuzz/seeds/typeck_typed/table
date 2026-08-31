@@ -1,0 +1,2 @@
+local t = {a=1, b="s"}
+return t.a

@@ -1283,3 +1283,42 @@ fn test_inspect_stack_deferred() -> Result<()> {
 
     Ok(())
 }
+
+// `raw_set` / `raw_get` reserve their stack slots up front (`lua_checkstack`)
+// instead of pushing blind, matching the guards in `Function::call` /
+// `Thread::resume`. Coverage for sustained raw traffic interleaved with VM
+// work; it does not by itself drive the frame margin low enough to trip the
+// VM's `top < ci.top` assertion (a C frame always gets LUA_MINSTACK headroom).
+#[test]
+fn test_raw_table_ops_reserve_stack_space() -> Result<()> {
+    let lua = Lua::new();
+
+    let table = lua.create_table();
+    for i in 0..2000i64 {
+        table.raw_set(format!("k{i}"), i)?;
+    }
+    for i in 0..2000i64 {
+        let v: i64 = table.raw_get(format!("k{i}"))?;
+        assert_eq!(v, i);
+    }
+
+    // Deep recursion inside the VM, then raw ops from the host right after.
+    lua.load(
+        r#"
+        function deep(n)
+            if n == 0 then return 0 end
+            return 1 + deep(n - 1)
+        end
+        return deep(150)
+    "#,
+    )
+    .eval::<i64>()?;
+
+    for i in 0..500i64 {
+        table.raw_set(format!("post{i}"), i)?;
+        let v: i64 = table.raw_get(format!("post{i}"))?;
+        assert_eq!(v, i);
+    }
+
+    Ok(())
+}

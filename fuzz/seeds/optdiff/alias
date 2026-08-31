@@ -1,0 +1,2 @@
+type T = {x: number}
+local v: T = {x=1}
