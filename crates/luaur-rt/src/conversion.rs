@@ -251,58 +251,66 @@ impl IntoLua for f32 {
     }
 }
 
-// Mirrors mlua's `lua_convert_float!`: the value-level `from_lua` keeps the
-// pre-existing behavior (numeric strings coerce, integer values widen, exact
-// error messages). The added stack fast path (`from_stack`) reads the raw
-// `lua_Number` straight off the stack, bypassing the `Value` representation,
-// like mlua does — this preserves details `Value` folds away (notably the
-// sign bit of `-0.0`, which `value_from_stack`'s whole-number normalization
-// to `Value::Integer` would drop).
-macro_rules! lua_convert_float {
-    ($x:ty, $to:literal) => {
-        impl FromLua for $x {
-            fn from_lua(value: Value, _lua: &Lua) -> Result<Self> {
-                match value {
-                    Value::Number(n) => Ok(n as $x),
-                    Value::Integer(i) => Ok(i as f64 as $x),
-                    // Lua coerces numeric strings to numbers (mirrors mlua).
-                    Value::String(ref s) => {
-                        let text = s.to_string_lossy();
-                        text.trim()
-                            .parse::<$x>()
-                            .or_else(|_| text.trim().parse::<f64>().map(|n| n as $x))
-                            .map_err(|_| Error::FromLuaConversionError {
-                                from: "string",
-                                to: $to.to_string(),
-                                message: Some("not a number".to_string()),
-                            })
-                    }
-                    other => Err(Error::FromLuaConversionError {
-                        from: other.type_name(),
-                        to: $to.to_string(),
-                        message: None,
-                    }),
-                }
-            }
-
-            unsafe fn from_stack(idx: c_int, lua: &Lua) -> Result<Self> {
-                let state = lua.state();
-                unsafe {
-                    if lua_type(state, idx) == ttype::NUMBER {
-                        // `lua_tonumberx` with a null `isnum` out-param: the
-                        // conversion cannot fail for an actual number.
-                        return Ok(lua_tonumberx(state, idx, core::ptr::null_mut()) as $x);
-                    }
-                }
-                // Fall back to the value-level conversion (string coercion
-                // and error messages stay identical to the slow path).
-                Self::from_lua(lua.value_from_stack(idx)?, lua)
+// The `from_stack` overrides below are the stack fast path mirroring mlua's
+// `lua_convert_float!`: they read the raw `lua_Number` straight off the stack,
+// bypassing the `Value` representation, which preserves details `Value` folds
+// away (notably the sign bit of `-0.0`, which `value_from_stack`'s
+// whole-number normalization to `Value::Integer` would drop). The value-level
+// `from_lua` behavior is unchanged.
+impl FromLua for f64 {
+    unsafe fn from_stack(idx: c_int, lua: &Lua) -> Result<Self> {
+        let state = lua.state();
+        unsafe {
+            if lua_type(state, idx) == ttype::NUMBER {
+                // `lua_tonumberx` with a null `isnum` out-param: the
+                // conversion cannot fail for an actual number.
+                return Ok(lua_tonumberx(state, idx, core::ptr::null_mut()));
             }
         }
-    };
+        // Fall back to the value-level conversion (string coercion and error
+        // messages stay identical to the slow path).
+        Self::from_lua(lua.value_from_stack(idx)?, lua)
+    }
+
+    fn from_lua(value: Value, _lua: &Lua) -> Result<Self> {
+        match value {
+            Value::Number(n) => Ok(n),
+            Value::Integer(i) => Ok(i as f64),
+            // Lua coerces numeric strings to numbers (mirrors mlua).
+            Value::String(ref s) => {
+                let text = s.to_string_lossy();
+                text.trim()
+                    .parse::<f64>()
+                    .map_err(|_| Error::FromLuaConversionError {
+                        from: "string",
+                        to: "f64".to_string(),
+                        message: Some("not a number".to_string()),
+                    })
+            }
+            other => Err(Error::FromLuaConversionError {
+                from: other.type_name(),
+                to: "f64".to_string(),
+                message: None,
+            }),
+        }
+    }
 }
-lua_convert_float!(f64, "f64");
-lua_convert_float!(f32, "f32");
+
+impl FromLua for f32 {
+    unsafe fn from_stack(idx: c_int, lua: &Lua) -> Result<Self> {
+        let state = lua.state();
+        unsafe {
+            if lua_type(state, idx) == ttype::NUMBER {
+                return Ok(lua_tonumberx(state, idx, core::ptr::null_mut()) as f32);
+            }
+        }
+        Self::from_lua(lua.value_from_stack(idx)?, lua)
+    }
+
+    fn from_lua(value: Value, lua: &Lua) -> Result<Self> {
+        Ok(f64::from_lua(value, lua)? as f32)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Strings
@@ -995,6 +1003,10 @@ macro_rules! impl_tuple_from {
             fn from_lua_multi(values: MultiValue, lua: &Lua) -> Result<Self> {
                 Ok(($last::from_lua_multi(values, lua)?,))
             }
+
+            unsafe fn from_stack_multi(base: c_int, nvals: c_int, lua: &Lua) -> Result<Self> {
+                Ok((unsafe { $last::from_stack_multi(base, nvals, lua)? },))
+            }
         }
     };
     ($last:ident; $head0:ident $($head:ident)*) => {
@@ -1008,6 +1020,36 @@ macro_rules! impl_tuple_from {
                 let $head0 = $head0::from_lua(values.pop_front().unwrap_or(Value::Nil), lua)?;
                 $( let $head = $head::from_lua(values.pop_front().unwrap_or(Value::Nil), lua)?; )*
                 let $last = $last::from_lua_multi(values, lua)?;
+                Ok(($head0, $($head,)* $last,))
+            }
+
+            unsafe fn from_stack_multi(base: c_int, nvals: c_int, lua: &Lua) -> Result<Self> {
+                // Walk the stack slots in order: each `FromLua` head reads its
+                // value directly via `from_stack` (so float fast paths apply
+                // per element instead of re-materializing a `Value` that folds
+                // `-0.0`), falling back to Nil past the last result, matching
+                // the value-level `unwrap_or(Value::Nil)`. The `FromLuaMulti`
+                // last slot consumes the remainder.
+                let head_count: c_int = 1 $(+ { let _ = stringify!($head); 1 })*;
+                let mut idx = base;
+                let $head0 = {
+                    idx += 1;
+                    if idx <= base + nvals {
+                        unsafe { $head0::from_stack(idx, lua)? }
+                    } else {
+                        $head0::from_lua(Value::Nil, lua)?
+                    }
+                };
+                $( let $head = {
+                    idx += 1;
+                    if idx <= base + nvals {
+                        unsafe { $head::from_stack(idx, lua)? }
+                    } else {
+                        $head::from_lua(Value::Nil, lua)?
+                    }
+                }; )*
+                let remaining = nvals - head_count;
+                let $last = unsafe { $last::from_stack_multi(idx, remaining, lua)? };
                 Ok(($head0, $($head,)* $last,))
             }
         }

@@ -510,13 +510,23 @@ fn test_negative_zero_round_trips_as_number() -> Result<()> {
     assert_eq!(n32, 0.0f32);
     assert!(n32.is_sign_negative());
 
-    // Script round trip: pass -0.0 through Lua code and back.
-    let round = lua.load("return -0.0").eval::<f64>()?;
-    assert!(round.is_sign_negative());
+    // Script round trip: pass -0.0 from Rust through Lua and back. This is
+    // the shape the checksum use case needs (script-owned state crossing the
+    // boundary twice) and exercises the argument push + result conversion
+    // paths, which the constant-folding eval cases above do not. A mixed
+    // tuple exercises the per-element stack fast path in the tuple impl.
+    let round = lua
+        .load("local z = ... return z, z")
+        .call::<(f64, f64)>(-0.0)?;
+    assert!(round.0.is_sign_negative());
+    assert!(round.1.is_sign_negative());
+    let mixed = lua
+        .load("local z = ... return 1, z")
+        .call::<(i32, f64)>(-0.0)?;
+    assert_eq!(mixed.0, 1);
+    assert!(mixed.1.is_sign_negative());
     // -0.0 + 0.0 is +0.0 (IEEE 754), so a script can flip the sign back.
     let flipped = lua.load("local z = ... return z + 0.0").call::<f64>(-0.0)?;
-    assert_eq!(flipped, 0.0);
-    assert!(!flipped.is_sign_negative());
     assert_eq!(flipped, 0.0);
     assert!(!flipped.is_sign_negative());
 
