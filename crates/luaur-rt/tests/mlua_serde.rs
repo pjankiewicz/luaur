@@ -757,7 +757,7 @@ fn test_from_value_whole_number_floats_stay_integers() -> LuaResult<()> {
         .load("{ count = 0, idx = 0, ratio = 0 }")
         .eval::<Value>()?;
 
-    let cfg: Cfg = lua.from_value(v.clone()).map_err(|e| e)?;
+    let cfg: Cfg = lua.from_value(v.clone())?;
     assert_eq!(
         cfg,
         Cfg {
