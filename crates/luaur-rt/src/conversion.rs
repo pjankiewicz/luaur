@@ -6,9 +6,11 @@ use crate::function::Function;
 use crate::multi::{MultiValue, Variadic};
 use crate::state::Lua;
 use crate::string::LuaString;
+use crate::sys::{lua_tonumberx, lua_type, ttype};
 use crate::table::Table;
 use crate::traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti};
 use crate::value::{Integer, Number, Value};
+use core::ffi::c_int;
 
 // ---------------------------------------------------------------------------
 // Value itself
@@ -243,42 +245,64 @@ impl IntoLua for f64 {
     }
 }
 
-impl FromLua for f64 {
-    fn from_lua(value: Value, _lua: &Lua) -> Result<Self> {
-        match value {
-            Value::Number(n) => Ok(n),
-            Value::Integer(i) => Ok(i as f64),
-            // Lua coerces numeric strings to numbers (mirrors mlua).
-            Value::String(ref s) => {
-                let text = s.to_string_lossy();
-                text.trim()
-                    .parse::<f64>()
-                    .map_err(|_| Error::FromLuaConversionError {
-                        from: "string",
-                        to: "f64".to_string(),
-                        message: Some("not a number".to_string()),
-                    })
-            }
-            other => Err(Error::FromLuaConversionError {
-                from: other.type_name(),
-                to: "f64".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-
 impl IntoLua for f32 {
     fn into_lua(self, _lua: &Lua) -> Result<Value> {
         Ok(Value::Number(self as Number))
     }
 }
 
-impl FromLua for f32 {
-    fn from_lua(value: Value, lua: &Lua) -> Result<Self> {
-        Ok(f64::from_lua(value, lua)? as f32)
-    }
+// Mirrors mlua's `lua_convert_float!`: the value-level `from_lua` keeps the
+// pre-existing behavior (numeric strings coerce, integer values widen, exact
+// error messages). The added stack fast path (`from_stack`) reads the raw
+// `lua_Number` straight off the stack, bypassing the `Value` representation,
+// like mlua does — this preserves details `Value` folds away (notably the
+// sign bit of `-0.0`, which `value_from_stack`'s whole-number normalization
+// to `Value::Integer` would drop).
+macro_rules! lua_convert_float {
+    ($x:ty, $to:literal) => {
+        impl FromLua for $x {
+            fn from_lua(value: Value, _lua: &Lua) -> Result<Self> {
+                match value {
+                    Value::Number(n) => Ok(n as $x),
+                    Value::Integer(i) => Ok(i as f64 as $x),
+                    // Lua coerces numeric strings to numbers (mirrors mlua).
+                    Value::String(ref s) => {
+                        let text = s.to_string_lossy();
+                        text.trim()
+                            .parse::<$x>()
+                            .or_else(|_| text.trim().parse::<f64>().map(|n| n as $x))
+                            .map_err(|_| Error::FromLuaConversionError {
+                                from: "string",
+                                to: $to.to_string(),
+                                message: Some("not a number".to_string()),
+                            })
+                    }
+                    other => Err(Error::FromLuaConversionError {
+                        from: other.type_name(),
+                        to: $to.to_string(),
+                        message: None,
+                    }),
+                }
+            }
+
+            unsafe fn from_stack(idx: c_int, lua: &Lua) -> Result<Self> {
+                let state = lua.state();
+                unsafe {
+                    if lua_type(state, idx) == ttype::NUMBER {
+                        // `lua_tonumberx` with a null `isnum` out-param: the
+                        // conversion cannot fail for an actual number.
+                        return Ok(lua_tonumberx(state, idx, core::ptr::null_mut()) as $x);
+                    }
+                }
+                // Fall back to the value-level conversion (string coercion
+                // and error messages stay identical to the slow path).
+                Self::from_lua(lua.value_from_stack(idx)?, lua)
+            }
+        }
+    };
 }
+lua_convert_float!(f64, "f64");
+lua_convert_float!(f32, "f32");
 
 // ---------------------------------------------------------------------------
 // Strings

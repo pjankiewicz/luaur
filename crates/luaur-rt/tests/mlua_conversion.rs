@@ -492,3 +492,39 @@ fn test_char_from_lua() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_negative_zero_round_trips_as_number() -> Result<()> {
+    // Mirrors mlua/upstream Luau: `-0.0` keeps its sign bit through
+    // `eval::<f64>()` and through a script round trip. `Value`'s
+    // representation still normalizes whole-number floats to `Value::Integer`
+    // (same as mlua), so this pins the *conversion* layer, not the `Value`
+    // variant.
+    let lua = Lua::new();
+
+    let n = lua.load("-0.0").eval::<f64>()?;
+    assert_eq!(n, 0.0);
+    assert!(n.is_sign_negative());
+
+    let n32 = lua.load("-0.0").eval::<f32>()?;
+    assert_eq!(n32, 0.0f32);
+    assert!(n32.is_sign_negative());
+
+    // Script round trip: pass -0.0 through Lua code and back.
+    let round = lua.load("return -0.0").eval::<f64>()?;
+    assert!(round.is_sign_negative());
+    // -0.0 + 0.0 is +0.0 (IEEE 754), so a script can flip the sign back.
+    let flipped = lua.load("local z = ... return z + 0.0").call::<f64>(-0.0)?;
+    assert_eq!(flipped, 0.0);
+    assert!(!flipped.is_sign_negative());
+    assert_eq!(flipped, 0.0);
+    assert!(!flipped.is_sign_negative());
+
+    // Positive zero and integers are unchanged.
+    assert_eq!(lua.load("return 0").eval::<i64>()?, 0);
+    assert_eq!(lua.load("return 42").eval::<i64>()?, 42);
+    assert_eq!(lua.load("return 0").eval::<f64>()?, 0.0);
+    assert!(!lua.load("return 0").eval::<f64>()?.is_sign_negative());
+
+    Ok(())
+}

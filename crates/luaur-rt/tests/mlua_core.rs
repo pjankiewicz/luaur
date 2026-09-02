@@ -430,13 +430,10 @@ fn test_num_conversion() -> Result<()> {
     assert_eq!(lua.unpack::<i128>(lua.pack(1i128 << 64)?)?, 1i128 << 64);
 
     // Negative zero
+    // Mirrors mlua/upstream Luau: the sign bit of `-0.0` survives `eval::<f64>()`.
     let negative_zero = lua.load("-0.0").eval::<f64>()?;
     assert_eq!(negative_zero, 0.0);
-    // DEVIATION: luaur normalizes `-0.0` to a positive zero (the sign bit is not
-    // preserved), whereas mlua/upstream-Luau keep `-0.0`. We pin the actual
-    // luaur behavior — the magnitude (`== 0.0`) is identical, only the sign
-    // differs.
-    assert!(!negative_zero.is_sign_negative());
+    assert!(negative_zero.is_sign_negative());
 
     Ok(())
 }
