@@ -6,9 +6,11 @@ use crate::function::Function;
 use crate::multi::{MultiValue, Variadic};
 use crate::state::Lua;
 use crate::string::LuaString;
+use crate::sys::{lua_tonumberx, lua_type, ttype};
 use crate::table::Table;
 use crate::traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti};
 use crate::value::{Integer, Number, Value};
+use core::ffi::c_int;
 
 // ---------------------------------------------------------------------------
 // Value itself
@@ -243,7 +245,33 @@ impl IntoLua for f64 {
     }
 }
 
+impl IntoLua for f32 {
+    fn into_lua(self, _lua: &Lua) -> Result<Value> {
+        Ok(Value::Number(self as Number))
+    }
+}
+
+// The `from_stack` overrides below are the stack fast path mirroring mlua's
+// `lua_convert_float!`: they read the raw `lua_Number` straight off the stack,
+// bypassing the `Value` representation, which preserves details `Value` folds
+// away (notably the sign bit of `-0.0`, which `value_from_stack`'s
+// whole-number normalization to `Value::Integer` would drop). The value-level
+// `from_lua` behavior is unchanged.
 impl FromLua for f64 {
+    unsafe fn from_stack(idx: c_int, lua: &Lua) -> Result<Self> {
+        let state = lua.state();
+        unsafe {
+            if lua_type(state, idx) == ttype::NUMBER {
+                // `lua_tonumberx` with a null `isnum` out-param: the
+                // conversion cannot fail for an actual number.
+                return Ok(lua_tonumberx(state, idx, core::ptr::null_mut()));
+            }
+        }
+        // Fall back to the value-level conversion (string coercion and error
+        // messages stay identical to the slow path).
+        Self::from_lua(lua.value_from_stack(idx)?, lua)
+    }
+
     fn from_lua(value: Value, _lua: &Lua) -> Result<Self> {
         match value {
             Value::Number(n) => Ok(n),
@@ -268,13 +296,17 @@ impl FromLua for f64 {
     }
 }
 
-impl IntoLua for f32 {
-    fn into_lua(self, _lua: &Lua) -> Result<Value> {
-        Ok(Value::Number(self as Number))
-    }
-}
-
 impl FromLua for f32 {
+    unsafe fn from_stack(idx: c_int, lua: &Lua) -> Result<Self> {
+        let state = lua.state();
+        unsafe {
+            if lua_type(state, idx) == ttype::NUMBER {
+                return Ok(lua_tonumberx(state, idx, core::ptr::null_mut()) as f32);
+            }
+        }
+        Self::from_lua(lua.value_from_stack(idx)?, lua)
+    }
+
     fn from_lua(value: Value, lua: &Lua) -> Result<Self> {
         Ok(f64::from_lua(value, lua)? as f32)
     }
@@ -971,6 +1003,10 @@ macro_rules! impl_tuple_from {
             fn from_lua_multi(values: MultiValue, lua: &Lua) -> Result<Self> {
                 Ok(($last::from_lua_multi(values, lua)?,))
             }
+
+            unsafe fn from_stack_multi(base: c_int, nvals: c_int, lua: &Lua) -> Result<Self> {
+                Ok((unsafe { $last::from_stack_multi(base, nvals, lua)? },))
+            }
         }
     };
     ($last:ident; $head0:ident $($head:ident)*) => {
@@ -984,6 +1020,36 @@ macro_rules! impl_tuple_from {
                 let $head0 = $head0::from_lua(values.pop_front().unwrap_or(Value::Nil), lua)?;
                 $( let $head = $head::from_lua(values.pop_front().unwrap_or(Value::Nil), lua)?; )*
                 let $last = $last::from_lua_multi(values, lua)?;
+                Ok(($head0, $($head,)* $last,))
+            }
+
+            unsafe fn from_stack_multi(base: c_int, nvals: c_int, lua: &Lua) -> Result<Self> {
+                // Walk the stack slots in order: each `FromLua` head reads its
+                // value directly via `from_stack` (so float fast paths apply
+                // per element instead of re-materializing a `Value` that folds
+                // `-0.0`), falling back to Nil past the last result, matching
+                // the value-level `unwrap_or(Value::Nil)`. The `FromLuaMulti`
+                // last slot consumes the remainder.
+                let head_count: c_int = 1 $(+ { let _ = stringify!($head); 1 })*;
+                let mut idx = base;
+                let $head0 = {
+                    idx += 1;
+                    if idx <= base + nvals {
+                        unsafe { $head0::from_stack(idx, lua)? }
+                    } else {
+                        $head0::from_lua(Value::Nil, lua)?
+                    }
+                };
+                $( let $head = {
+                    idx += 1;
+                    if idx <= base + nvals {
+                        unsafe { $head::from_stack(idx, lua)? }
+                    } else {
+                        $head::from_lua(Value::Nil, lua)?
+                    }
+                }; )*
+                let remaining = nvals - head_count;
+                let $last = unsafe { $last::from_stack_multi(idx, remaining, lua)? };
                 Ok(($head0, $($head,)* $last,))
             }
         }

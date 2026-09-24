@@ -79,16 +79,16 @@ impl Function {
                     "stack overflow: too many return values".to_string(),
                 ));
             }
-            // Collect every value pushed above `base` as the results.
+            // Collect every value pushed above `base` as the results. Hand
+            // them to `R::from_stack_multi` so types with a stack fast path
+            // (floats) can read the raw values without materializing `Value`s
+            // (the `Value` normalization folds `-0.0` into a positive zero;
+            // mlua avoids the same problem via `FromLuaMulti::from_stack_multi`).
             let top = lua_gettop(state);
             let nresults = top - base;
-            let mut results = MultiValue::with_capacity(nresults.max(0) as usize);
-            for i in 0..nresults {
-                let idx = base + 1 + i;
-                results.push_back(lua.value_from_stack(idx)?);
-            }
+            let result = R::from_stack_multi(base, nresults, &lua);
             lua_settop(state, base);
-            R::from_lua_multi(results, &lua)
+            result
         }
     }
 

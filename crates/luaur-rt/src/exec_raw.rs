@@ -131,15 +131,15 @@ impl Lua {
                     "stack overflow: too many return values".to_string(),
                 ));
             }
-            // Collect results left above `base`.
+            // Collect results left above `base` via `R::from_stack_multi` so
+            // types with a stack fast path (floats) read the raw values without
+            // materializing `Value`s (whose integer normalization folds `-0.0`
+            // into a positive zero).
             let top = lua_gettop(state);
             let nresults = top - base;
-            let mut results = MultiValue::with_capacity(nresults.max(0) as usize);
-            for i in 0..nresults {
-                results.push_back(self.value_from_stack(base + 1 + i)?);
-            }
+            let result = R::from_stack_multi(base, nresults, self);
             lua_settop(state, base);
-            R::from_lua_multi(results, self)
+            result
         }
     }
 

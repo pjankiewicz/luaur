@@ -737,3 +737,42 @@ fn test_arbitrary_precision() {
     let num = lua.to_value(&num).unwrap();
     assert_eq!(num.type_name(), "table");
 }
+
+// Regression guard for the -0.0 fast-path PR (#40): the `Value` representation
+// must keep normalizing whole-number floats to `Value::Integer` (mlua parity),
+// so `deserialize_any` for integer targets still sees `visit_i64`. This is the
+// exact case the withdrawn #37 patch broke (`0` became `Number(0.0)` and
+// failed with "invalid type: floating point `0.0`, expected i64").
+#[test]
+fn test_from_value_whole_number_floats_stay_integers() -> LuaResult<()> {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct Cfg {
+        count: u32,
+        idx: i64,
+        ratio: f64,
+    }
+
+    let lua = Lua::new();
+    let v = lua
+        .load("{ count = 0, idx = 0, ratio = 0 }")
+        .eval::<Value>()?;
+
+    let cfg: Cfg = lua.from_value(v.clone())?;
+    assert_eq!(
+        cfg,
+        Cfg {
+            count: 0,
+            idx: 0,
+            ratio: 0.0,
+        }
+    );
+
+    // The JSON shape must not gain fractional zeros either.
+    let json: serde_json::Value = lua.from_value(v)?;
+    assert_eq!(
+        json,
+        serde_json::json!({ "count": 0, "idx": 0, "ratio": 0 })
+    );
+
+    Ok(())
+}
